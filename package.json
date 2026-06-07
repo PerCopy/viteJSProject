@@ -1,0 +1,51 @@
+{
+  "name": "vitejsproject",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:frontend": "vite",
+    "dev:backend": "nodemon backend/server.js",
+    "dev": "concurrently --kill-others \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report playwright-recordings/report",
+    "test:codevalid:signin": "PLAYWRIGHT_BROWSERS_PATH=./.playwright-browsers playwright test --config .codevalid/ui/playwright.config.js",
+    "test:codevalid:install": "PLAYWRIGHT_BROWSERS_PATH=./.playwright-browsers playwright install chromium",
+    "test:codevalid:signin:report": "playwright show-report .codevalid/ui/recordings/report"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.16",
+    "@radix-ui/react-label": "^2.1.9",
+    "@radix-ui/react-select": "^2.3.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "lucide-react": "^1.17.0",
+    "morgan": "^1.11.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-router-dom": "^7.17.0",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.60.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "autoprefixer": "^10.5.0",
+    "concurrently": "^10.0.3",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "nodemon": "^3.1.14",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.19",
+    "vite": "^8.0.12"
+  }
+}

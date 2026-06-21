@@ -5,31 +5,28 @@ BASE_URL="${BASE_URL:-http://app:6713}"
 CASE_SUFFIX="$(date +%s)-$$"
 RESPONSE_FILE="/tmp/view_registrations_sorted_by_date_descending_${CASE_SUFFIX}.json"
 
-cleanup_files() {
+cleanup() {
   rm -f "$RESPONSE_FILE"
 }
-trap cleanup_files EXIT
+trap cleanup EXIT
 
-# Given — use the existing seeded event with three registrations.
-EVENT_ID="evt-003"
+# Given — Assume seeded in-memory data contains event evt-003 with registrations reg-201, reg-202, and reg-203.
 
-# When — request registrations for the event.
-HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/$EVENT_ID")"
+# When — GET /api/registrations/evt-003
+HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
+  "$BASE_URL/api/registrations/evt-003")"
 
-# Then — response is 200 and registrations are ordered newest to oldest.
+# Then — HTTP 200 with registrations sorted reg-202, reg-203, reg-201 by registeredAt descending.
 [ "$HTTP_STATUS" = "200" ]
-grep -F '"eventId":"evt-003"' "$RESPONSE_FILE" >/dev/null
-COUNT="$(grep -o '"eventId":"evt-003"' "$RESPONSE_FILE" | wc -l | tr -d ' ')"
-[ "$COUNT" = "3" ]
-grep -F '"registeredAt":"2024-02-03T16:30:00Z"' "$RESPONSE_FILE" >/dev/null
-grep -F '"registeredAt":"2024-02-02T12:00:00Z"' "$RESPONSE_FILE" >/dev/null
-grep -F '"registeredAt":"2024-02-01T08:00:00Z"' "$RESPONSE_FILE" >/dev/null
-POS1="$(grep -b -o '"registeredAt":"2024-02-03T16:30:00Z"' "$RESPONSE_FILE" | head -n 1 | cut -d: -f1)"
-POS2="$(grep -b -o '"registeredAt":"2024-02-02T12:00:00Z"' "$RESPONSE_FILE" | head -n 1 | cut -d: -f1)"
-POS3="$(grep -b -o '"registeredAt":"2024-02-01T08:00:00Z"' "$RESPONSE_FILE" | head -n 1 | cut -d: -f1)"
-[ "$POS1" -lt "$POS2" ]
-[ "$POS2" -lt "$POS3" ]
+grep -F '"id":"reg-202"' "$RESPONSE_FILE" >/dev/null
+grep -F '"id":"reg-203"' "$RESPONSE_FILE" >/dev/null
+grep -F '"id":"reg-201"' "$RESPONSE_FILE" >/dev/null
+POS_202="$(grep -bo '"id":"reg-202"' "$RESPONSE_FILE" | head -1 | cut -d: -f1)"
+POS_203="$(grep -bo '"id":"reg-203"' "$RESPONSE_FILE" | head -1 | cut -d: -f1)"
+POS_201="$(grep -bo '"id":"reg-201"' "$RESPONSE_FILE" | head -1 | cut -d: -f1)"
+[ "$POS_202" -lt "$POS_203" ]
+[ "$POS_203" -lt "$POS_201" ]
+
+# Cleanup — No side effects to undo for this read-only test.
 
 echo "CODEVALID_TEST_ASSERTION_OK:view_registrations_sorted_by_date_descending"
-
-# Cleanup — no API side effects; only temporary files are removed by trap.

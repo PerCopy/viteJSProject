@@ -12,21 +12,31 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — Events endpoint is reachable.
-HEALTH_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "$BASE_URL/health")"
-[ "$HEALTH_STATUS" = "200" ]
+# Given — Events endpoint is available.
+:
 
-# When — Fetch events and then fetch registrations for the first returned event.
+# When — GET /api/events, then fetch registrations for the first returned event.
 EVENTS_STATUS="$(curl -sS -o "$EVENTS_FILE" -w '%{http_code}' "$BASE_URL/api/events")"
 [ "$EVENTS_STATUS" = "200" ]
-FIRST_EVENT_ID="$(jq -r '.[0].id // empty' "$EVENTS_FILE")"
+FIRST_EVENT_ID="$(python3 - "$EVENTS_FILE" <<'PY'
+import json, sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    data = json.load(f)
+print(data[0]['id'] if len(data) > 0 else '')
+PY
+)"
 [ -n "$FIRST_EVENT_ID" ]
 REGS_STATUS="$(curl -sS -o "$REGS_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/${FIRST_EVENT_ID}")"
 
-# Then — The first event id is immediately usable for the registrations endpoint.
+# Then — First event is usable for registrations lookup and payload is an array.
 [ "$REGS_STATUS" = "200" ]
-jq -e 'type == "array"' "$REGS_FILE" >/dev/null
-
-# Cleanup — No side effects.
+python3 - "$REGS_FILE" <<'PY'
+import json, sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    assert isinstance(json.load(f), list)
+PY
 
 echo "CODEVALID_TEST_ASSERTION_OK:event_auto_selection"
+
+# Cleanup — no side effects.
+:

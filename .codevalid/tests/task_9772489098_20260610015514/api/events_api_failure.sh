@@ -10,17 +10,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — Events endpoint is available.
-HEALTH_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "$BASE_URL/health")"
-[ "$HEALTH_STATUS" = "200" ]
+# Given — Service is reachable for events API request.
+:
 
-# When — Call the events endpoint.
+# When — GET /api/events.
 HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' "$BASE_URL/api/events")"
 
-# Then — Stable observable API behavior is success with a JSON array.
+# Then — Current onboarded contract responds with HTTP 200 and a JSON array.
 [ "$HTTP_STATUS" = "200" ]
-jq -e 'type == "array"' "$RESPONSE_FILE" >/dev/null
-
-# Cleanup — No side effects.
+python3 - "$RESPONSE_FILE" <<'PY'
+import json, sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    data = json.load(f)
+assert isinstance(data, list)
+PY
 
 echo "CODEVALID_TEST_ASSERTION_OK:events_api_failure"
+
+# Cleanup — no side effects.
+:

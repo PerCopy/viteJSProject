@@ -5,21 +5,21 @@ BASE_URL="${BASE_URL:-http://app:6713}"
 CASE_SUFFIX="$(date +%s)-$$"
 RESPONSE_FILE="/tmp/view_registrations_event_not_found_${CASE_SUFFIX}.json"
 
-cleanup_files() {
+cleanup() {
   rm -f "$RESPONSE_FILE"
 }
-trap cleanup_files EXIT
+trap cleanup EXIT
 
-# Given — choose an event id that does not exist.
-EVENT_ID="evt-nonexistent"
+# Given — Assume no event exists with id evt-nonexistent in the in-memory dataset.
 
-# When — request registrations for a missing event.
-HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/$EVENT_ID")"
+# When — GET /api/registrations/evt-nonexistent
+HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
+  "$BASE_URL/api/registrations/evt-nonexistent")"
 
-# Then — response is 404 with the expected error message.
+# Then — HTTP 404 with Event not found message.
 [ "$HTTP_STATUS" = "404" ]
 grep -F '"message":"Event not found."' "$RESPONSE_FILE" >/dev/null
 
-echo "CODEVALID_TEST_ASSERTION_OK:view_registrations_event_not_found"
+# Cleanup — No side effects to undo for this read-only test.
 
-# Cleanup — no API side effects; only temporary files are removed by trap.
+echo "CODEVALID_TEST_ASSERTION_OK:view_registrations_event_not_found"

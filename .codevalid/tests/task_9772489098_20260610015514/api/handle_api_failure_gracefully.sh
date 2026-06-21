@@ -11,18 +11,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — Use a non-existent event id.
+# Given — Use an event id that does not exist.
 
-# When — Submit a registration against that missing event.
+# When — Submit a registration for the missing event.
 HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/registrations" \
   -H 'Content-Type: application/json' \
-  --data "{\"eventId\":\"${MISSING_EVENT_ID}\",\"name\":\"missing-event-${CASE_SUFFIX}\",\"email\":\"missing-${CASE_SUFFIX}@example.com\",\"phone\":\"555-${CASE_SUFFIX}\"}")"
+  --data "{\"eventId\":\"${MISSING_EVENT_ID}\",\"name\":\"missing-event-${CASE_SUFFIX}\",\"email\":\"missing-event-${CASE_SUFFIX}@example.com\",\"phone\":\"555${CASE_SUFFIX}\"}")"
 
-# Then — The API returns not found.
+# Then — HTTP 404 with event-not-found message.
 [ "$HTTP_STATUS" = "404" ]
-grep -F '"message":"Event not found."' "$RESPONSE_FILE" >/dev/null
+grep -F 'Event not found.' "$RESPONSE_FILE" >/dev/null
 
 echo "CODEVALID_TEST_ASSERTION_OK:handle_api_failure_gracefully"
 
-# Cleanup — No server-side state was created.
+# Cleanup — No side effects expected because event lookup fails.

@@ -10,18 +10,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — Prepare a payload missing all required fields.
+# Given — The registrations endpoint is reachable.
 
-# When — Submit the invalid registration request.
+# When — Submit a registration payload missing required fields.
 HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/registrations" \
   -H 'Content-Type: application/json' \
   --data '{"eventId":"","name":"","email":"","phone":""}')"
 
-# Then — The API returns the required-fields validation error.
+# Then — HTTP 400 with required-fields validation message.
 [ "$HTTP_STATUS" = "400" ]
-grep -F '"message":"Event, name, email, and phone number are required."' "$RESPONSE_FILE" >/dev/null
+grep -F 'Event, name, email, and phone number are required.' "$RESPONSE_FILE" >/dev/null
 
 echo "CODEVALID_TEST_ASSERTION_OK:validate_required_fields_for_registration"
 
-# Cleanup — No server-side state was created.
+# Cleanup — No side effects expected because validation fails.

@@ -4,7 +4,6 @@ set -eu
 BASE_URL="${BASE_URL:-http://app:6713}"
 CASE_SUFFIX="$(date +%s)-$$"
 EMAIL="alice.brown.${CASE_SUFFIX}@example.com"
-PHONE="+1-555-333-4444"
 RESPONSE_FILE="/tmp/registration_rejected_event_not_found_${CASE_SUFFIX}.json"
 
 cleanup() {
@@ -12,19 +11,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — use a non-existent event id with otherwise valid registration data.
-:
+# Given — Use a non-existent event id with otherwise valid attendee data.
+: > "$RESPONSE_FILE"
 
-# When — submit the registration request.
+# When — Attempt to register for an event that does not exist.
 HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/registrations" \
   -H 'Content-Type: application/json' \
-  --data "{\"eventId\":\"evt-nonexistent\",\"name\":\"Alice Brown\",\"email\":\"${EMAIL}\",\"phone\":\"${PHONE}\"}")"
+  --data "{\"eventId\":\"evt-nonexistent-${CASE_SUFFIX}\",\"name\":\"Alice Brown\",\"email\":\"${EMAIL}\",\"phone\":\"+1-555-333-4444\"}")"
 
-# Then — it returns 404 with the event-not-found message.
+# Then — Expect 404 with event-not-found message.
 [ "$HTTP_STATUS" = "404" ]
-grep -F 'Event not found.' "$RESPONSE_FILE" >/dev/null
+grep -F '"message":"Event not found."' "$RESPONSE_FILE" >/dev/null
 
 echo "CODEVALID_TEST_ASSERTION_OK:registration_rejected_event_not_found"
 
-# Cleanup — temp files are removed by trap.
+# Cleanup — Rejected request should create no server-side state; temp files are removed by trap.

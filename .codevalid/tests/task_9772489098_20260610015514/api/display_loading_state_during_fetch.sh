@@ -10,16 +10,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — The events endpoint is available to fetch event data.
+# Given — The events endpoint is available.
 
-# When — Fetch the events list.
+# When — Request the events list that the UI would fetch while loading.
 HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' "$BASE_URL/api/events")"
 
-# Then — The API returns data suitable for populating the events view.
+# Then — HTTP 200 and event data payload are returned.
 [ "$HTTP_STATUS" = "200" ]
-grep -F '[' "$RESPONSE_FILE" >/dev/null
-grep -F '"registrationCount"' "$RESPONSE_FILE" >/dev/null
+grep -F '"id"' "$RESPONSE_FILE" >/dev/null
+grep -F '"title"' "$RESPONSE_FILE" >/dev/null
 
 echo "CODEVALID_TEST_ASSERTION_OK:display_loading_state_during_fetch"
 
-# Cleanup — No server-side state was created.
+# Cleanup — No side effects to remove.

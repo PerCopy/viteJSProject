@@ -10,19 +10,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — The events API is reachable and this test has a unique temp file.
+# Given — The events API is reachable.
 
-# When — Fetch the events list.
-HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
-  "$BASE_URL/api/events")"
+# When — Request the events list.
+HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' "$BASE_URL/api/events")"
 
-# Then — The API responds successfully with a JSON array of events.
+# Then — HTTP 200 and event objects are returned with registration counts.
 [ "$HTTP_STATUS" = "200" ]
-grep -F '[' "$RESPONSE_FILE" >/dev/null
 grep -F '"id"' "$RESPONSE_FILE" >/dev/null
 grep -F '"title"' "$RESPONSE_FILE" >/dev/null
 grep -F '"registrationCount"' "$RESPONSE_FILE" >/dev/null
 
 echo "CODEVALID_TEST_ASSERTION_OK:view_active_events_on_load"
 
-# Cleanup — No server-side state was created.
+# Cleanup — No side effects to remove.

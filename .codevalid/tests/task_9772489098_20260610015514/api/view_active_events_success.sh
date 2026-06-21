@@ -10,17 +10,29 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — API is reachable.
-HEALTH_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "$BASE_URL/health")"
-[ "$HEALTH_STATUS" = "200" ]
+# Given — API base URL is available; use unique temp files for this case.
+:
 
-# When — Request the events list.
+# When — GET /api/events to load the events list.
 HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' "$BASE_URL/api/events")"
 
-# Then — Events endpoint returns HTTP 200 and a JSON array.
+# Then — HTTP 200 and response contains event fields.
 [ "$HTTP_STATUS" = "200" ]
-jq -e 'type == "array"' "$RESPONSE_FILE" >/dev/null
-
-# Cleanup — No side effects.
+grep -F '"id":' "$RESPONSE_FILE" >/dev/null
+grep -F '"title":' "$RESPONSE_FILE" >/dev/null
+grep -F '"startDate":' "$RESPONSE_FILE" >/dev/null
+grep -F '"endDate":' "$RESPONSE_FILE" >/dev/null
+grep -F '"registrationCount":' "$RESPONSE_FILE" >/dev/null
+FIRST_EVENT_ID="$(python3 - "$RESPONSE_FILE" <<'PY'
+import json, sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    data = json.load(f)
+print(data[0]['id'] if isinstance(data, list) and data else '')
+PY
+)"
+[ -n "$FIRST_EVENT_ID" ]
 
 echo "CODEVALID_TEST_ASSERTION_OK:view_active_events_success"
+
+# Cleanup — no side effects to undo.
+:

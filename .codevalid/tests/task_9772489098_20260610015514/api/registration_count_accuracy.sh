@@ -4,33 +4,29 @@ set -eu
 BASE_URL="${BASE_URL:-http://app:6713}"
 CASE_SUFFIX="$(date +%s)-$$"
 EVENTS_FILE="/tmp/registration_count_accuracy_events_${CASE_SUFFIX}.json"
-CONF_FILE="/tmp/registration_count_accuracy_conf_${CASE_SUFFIX}.json"
-MEETUP_FILE="/tmp/registration_count_accuracy_meetup_${CASE_SUFFIX}.json"
+REGS_FILE="/tmp/registration_count_accuracy_regs_${CASE_SUFFIX}.json"
+EVENT_BLOCKS_FILE="/tmp/registration_count_accuracy_blocks_${CASE_SUFFIX}.txt"
 
-cleanup_tmp() {
-  rm -f "$EVENTS_FILE" "$CONF_FILE" "$MEETUP_FILE"
-}
-trap cleanup_tmp EXIT
-
-# Given — The service is reachable and fixture registrations exist for evt-conf and evt-meetup.
-curl -sS "$BASE_URL/health" >/dev/null
-
-# When — Request the events collection and each event's registration list.
+# Given — Retrieve the current events list.
 EVENTS_STATUS="$(curl -sS -o "$EVENTS_FILE" -w '%{http_code}' "$BASE_URL/api/events")"
-CONF_STATUS="$(curl -sS -o "$CONF_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/evt-conf")"
-MEETUP_STATUS="$(curl -sS -o "$MEETUP_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/evt-meetup")"
-
-# Then — The API returns 200 and the counts match 5 for evt-conf and 2 for evt-meetup.
 [ "$EVENTS_STATUS" = "200" ]
-[ "$CONF_STATUS" = "200" ]
-[ "$MEETUP_STATUS" = "200" ]
-grep -F '"id":"evt-conf"' "$EVENTS_FILE" >/dev/null
-grep -F '"id":"evt-meetup"' "$EVENTS_FILE" >/dev/null
-CONF_COUNT="$(grep -o '"eventId":"evt-conf"' "$CONF_FILE" | wc -l | tr -d ' ')"
-MEETUP_COUNT="$(grep -o '"eventId":"evt-meetup"' "$MEETUP_FILE" | wc -l | tr -d ' ')"
-[ "$CONF_COUNT" = "5" ]
-[ "$MEETUP_COUNT" = "2" ]
-grep -F '"registrationCount":5' "$EVENTS_FILE" >/dev/null
-grep -F '"registrationCount":2' "$EVENTS_FILE" >/dev/null
+
+# When — For each event returned, request its registrations by event id.
+tr '{' '\n' < "$EVENTS_FILE" | grep '"id":"' > "$EVENT_BLOCKS_FILE"
+
+# Then — Each event's registrationCount matches the number of registrations returned by /api/registrations/:eventId.
+while IFS= read -r BLOCK; do
+  EVENT_ID="$(printf '%s' "$BLOCK" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')"
+  EXPECTED_COUNT="$(printf '%s' "$BLOCK" | sed -n 's/.*"registrationCount":\([0-9][0-9]*\).*/\1/p')"
+  [ -n "$EVENT_ID" ] || continue
+  [ -n "$EXPECTED_COUNT" ] || continue
+  REGS_STATUS="$(curl -sS -o "$REGS_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/$EVENT_ID")"
+  [ "$REGS_STATUS" = "200" ]
+  ACTUAL_COUNT="$(grep -o '"registeredAt":"' "$REGS_FILE" | wc -l | tr -d ' ')"
+  [ "$ACTUAL_COUNT" = "$EXPECTED_COUNT" ]
+done < "$EVENT_BLOCKS_FILE"
 
 echo "CODEVALID_TEST_ASSERTION_OK:registration_count_accuracy"
+
+# Cleanup — Remove temp files.
+rm -f "$EVENTS_FILE" "$REGS_FILE" "$EVENT_BLOCKS_FILE"

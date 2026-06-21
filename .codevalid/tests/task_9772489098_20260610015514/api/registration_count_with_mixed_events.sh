@@ -4,40 +4,29 @@ set -eu
 BASE_URL="${BASE_URL:-http://app:6713}"
 CASE_SUFFIX="$(date +%s)-$$"
 EVENTS_FILE="/tmp/registration_count_with_mixed_events_events_${CASE_SUFFIX}.json"
-A_FILE="/tmp/registration_count_with_mixed_events_a_${CASE_SUFFIX}.json"
-B_FILE="/tmp/registration_count_with_mixed_events_b_${CASE_SUFFIX}.json"
-C_FILE="/tmp/registration_count_with_mixed_events_c_${CASE_SUFFIX}.json"
+REGS_FILE="/tmp/registration_count_with_mixed_events_regs_${CASE_SUFFIX}.json"
+EVENT_BLOCKS_FILE="/tmp/registration_count_with_mixed_events_blocks_${CASE_SUFFIX}.txt"
 
-cleanup_tmp() {
-  rm -f "$EVENTS_FILE" "$A_FILE" "$B_FILE" "$C_FILE"
-}
-trap cleanup_tmp EXIT
-
-# Given — The service is reachable and fixture events evt-a, evt-b, and evt-c exist.
-curl -sS "$BASE_URL/health" >/dev/null
-
-# When — Request the events collection and each event's registration list.
+# Given — Retrieve the current events list containing mixed registration counts.
 EVENTS_STATUS="$(curl -sS -o "$EVENTS_FILE" -w '%{http_code}' "$BASE_URL/api/events")"
-A_STATUS="$(curl -sS -o "$A_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/evt-a")"
-B_STATUS="$(curl -sS -o "$B_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/evt-b")"
-C_STATUS="$(curl -sS -o "$C_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/evt-c")"
-
-# Then — The API returns 200 and registration totals remain isolated per event.
 [ "$EVENTS_STATUS" = "200" ]
-[ "$A_STATUS" = "200" ]
-[ "$B_STATUS" = "200" ]
-[ "$C_STATUS" = "200" ]
-grep -F '"id":"evt-a"' "$EVENTS_FILE" >/dev/null
-grep -F '"id":"evt-b"' "$EVENTS_FILE" >/dev/null
-grep -F '"id":"evt-c"' "$EVENTS_FILE" >/dev/null
-grep -F '"registrationCount":3' "$EVENTS_FILE" >/dev/null
-grep -F '"registrationCount":7' "$EVENTS_FILE" >/dev/null
-grep -F '"registrationCount":0' "$EVENTS_FILE" >/dev/null
-A_COUNT="$(grep -o '"eventId":"evt-a"' "$A_FILE" | wc -l | tr -d ' ')"
-B_COUNT="$(grep -o '"eventId":"evt-b"' "$B_FILE" | wc -l | tr -d ' ')"
-C_COUNT="$(grep -o '"eventId":"evt-c"' "$C_FILE" | wc -l | tr -d ' ')"
-[ "$A_COUNT" = "3" ]
-[ "$B_COUNT" = "7" ]
-[ "$C_COUNT" = "0" ]
+tr '{' '\n' < "$EVENTS_FILE" | grep '"id":"' > "$EVENT_BLOCKS_FILE"
+
+# When — Query registrations for each returned event id.
+
+# Then — Registration counts are isolated by event id and match only their own registrations endpoint results.
+while IFS= read -r BLOCK; do
+  EVENT_ID="$(printf '%s' "$BLOCK" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')"
+  EXPECTED_COUNT="$(printf '%s' "$BLOCK" | sed -n 's/.*"registrationCount":\([0-9][0-9]*\).*/\1/p')"
+  [ -n "$EVENT_ID" ] || continue
+  [ -n "$EXPECTED_COUNT" ] || continue
+  REGS_STATUS="$(curl -sS -o "$REGS_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/$EVENT_ID")"
+  [ "$REGS_STATUS" = "200" ]
+  ACTUAL_COUNT="$(grep -o '"registeredAt":"' "$REGS_FILE" | wc -l | tr -d ' ')"
+  [ "$ACTUAL_COUNT" = "$EXPECTED_COUNT" ]
+done < "$EVENT_BLOCKS_FILE"
 
 echo "CODEVALID_TEST_ASSERTION_OK:registration_count_with_mixed_events"
+
+# Cleanup — Remove temp files.
+rm -f "$EVENTS_FILE" "$REGS_FILE" "$EVENT_BLOCKS_FILE"

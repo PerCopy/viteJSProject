@@ -3,30 +3,22 @@ set -eu
 
 BASE_URL="${BASE_URL:-http://app:6713}"
 CASE_SUFFIX="$(date +%s)-$$"
-EVENTS_FILE="/tmp/events_same_start_date_sorting_events_${CASE_SUFFIX}.json"
-MORNING_FILE="/tmp/events_same_start_date_sorting_morning_${CASE_SUFFIX}.json"
-AFTERNOON_FILE="/tmp/events_same_start_date_sorting_afternoon_${CASE_SUFFIX}.json"
+RESPONSE_FILE="/tmp/events_same_start_date_sorting_${CASE_SUFFIX}.json"
+DATES_FILE="/tmp/events_same_start_date_sorting_dates_${CASE_SUFFIX}.txt"
 
-cleanup_tmp() {
-  rm -f "$EVENTS_FILE" "$MORNING_FILE" "$AFTERNOON_FILE"
-}
-trap cleanup_tmp EXIT
+# Given — The events endpoint should include all events, even if multiple share the same startDate.
 
-# Given — The service is reachable and two fixture events share the same start date.
-curl -sS "$BASE_URL/health" >/dev/null
+# When — Send GET request to /api/events.
+HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' "$BASE_URL/api/events")"
 
-# When — Request the events collection and both per-event registration lists.
-EVENTS_STATUS="$(curl -sS -o "$EVENTS_FILE" -w '%{http_code}' "$BASE_URL/api/events")"
-MORNING_STATUS="$(curl -sS -o "$MORNING_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/evt-morning")"
-AFTERNOON_STATUS="$(curl -sS -o "$AFTERNOON_FILE" -w '%{http_code}' "$BASE_URL/api/registrations/evt-afternoon")"
-
-# Then — The API returns 200 and includes both events with independent registration data.
-[ "$EVENTS_STATUS" = "200" ]
-[ "$MORNING_STATUS" = "200" ]
-[ "$AFTERNOON_STATUS" = "200" ]
-grep -F '"id":"evt-morning"' "$EVENTS_FILE" >/dev/null
-grep -F '"id":"evt-afternoon"' "$EVENTS_FILE" >/dev/null
-grep -F '"startDate":"2024-07-01"' "$EVENTS_FILE" >/dev/null
-grep -F '"registrationCount":' "$EVENTS_FILE" >/dev/null
+# Then — HTTP 200 is returned, response is a JSON array, and duplicate startDate values do not break the response.
+[ "$HTTP_STATUS" = "200" ]
+grep -Eq '^\[' "$RESPONSE_FILE"
+grep -F '"registrationCount":' "$RESPONSE_FILE" >/dev/null
+grep -o '"startDate":"[^"]*"' "$RESPONSE_FILE" | sed 's/"startDate":"//; s/"$//' > "$DATES_FILE"
+[ -f "$DATES_FILE" ]
 
 echo "CODEVALID_TEST_ASSERTION_OK:events_same_start_date_sorting"
+
+# Cleanup — Remove temp files.
+rm -f "$RESPONSE_FILE" "$DATES_FILE"

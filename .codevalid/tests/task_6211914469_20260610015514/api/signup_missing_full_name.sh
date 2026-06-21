@@ -12,19 +12,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — prepare unique username and email while omitting fullName.
-: > /dev/null
+# Given — Prepare unique username and email while omitting fullName.
+:
 
-# When — send signup request without fullName.
+# When — POST /api/auth/signup without fullName.
 HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/auth/signup" \
   -H 'Content-Type: application/json' \
   --data "{\"username\":\"${USERNAME}\",\"email\":\"${EMAIL}\",\"password\":\"pass123\"}")"
 
-# Then — verify 400 response and required-fields message.
+# Then — HTTP 400 with required-fields validation message.
 [ "$HTTP_STATUS" = "400" ]
 grep -F '"message":"Username, email, password, and full name are required."' "$RESPONSE_FILE" >/dev/null
 
 echo "CODEVALID_TEST_ASSERTION_OK:signup_missing_full_name"
 
-# Cleanup — temp file removed by trap.
+# Cleanup — Temp file removed by trap.

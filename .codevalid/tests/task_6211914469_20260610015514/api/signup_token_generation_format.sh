@@ -14,21 +14,34 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — prepare unique signup values.
-: > /dev/null
+# Given — Prepare unique signup fields for successful user creation.
+:
 
-# When — send signup request with valid required fields.
+# When — POST /api/auth/signup and capture the created user and token.
 HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/auth/signup" \
   -H 'Content-Type: application/json' \
   --data "{\"username\":\"${USERNAME}\",\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\",\"fullName\":\"${FULL_NAME}\"}")"
 
-# Then — verify 201 response and token format simulated-jwt-token-for-{userId}.
+# Then — HTTP 201 and token format includes the returned user.id.
 [ "$HTTP_STATUS" = "201" ]
-USER_ID="$(grep -o '"id":"[^"]*"' "$RESPONSE_FILE" | head -1 | cut -d'"' -f4)"
-[ -n "$USER_ID" ]
-grep -F "\"token\":\"simulated-jwt-token-for-${USER_ID}\"" "$RESPONSE_FILE" >/dev/null
+grep -F '"token":"simulated-jwt-token-for-' "$RESPONSE_FILE" >/dev/null
+USER_ID="$(python3 - "$RESPONSE_FILE" <<'PY'
+import json, sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    data = json.load(f)
+print(data['user']['id'])
+PY
+)"
+TOKEN="$(python3 - "$RESPONSE_FILE" <<'PY'
+import json, sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    data = json.load(f)
+print(data['token'])
+PY
+)"
+[ "$TOKEN" = "simulated-jwt-token-for-$USER_ID" ]
 
 echo "CODEVALID_TEST_ASSERTION_OK:signup_token_generation_format"
 
-# Cleanup — no API or DB cleanup path exists for in-memory users; temp file removed by trap.
+# Cleanup — No cleanup endpoint exists; temp file removed by trap.

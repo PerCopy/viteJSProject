@@ -14,25 +14,26 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — prepare unique signup values.
-: > /dev/null
+# Given — Prepare unique credentials for successful signup.
+:
 
-# When — send signup request with valid required fields.
+# When — POST /api/auth/signup with valid required fields.
 HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/auth/signup" \
   -H 'Content-Type: application/json' \
   --data "{\"username\":\"${USERNAME}\",\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\",\"fullName\":\"${FULL_NAME}\"}")"
 
-# Then — verify 201 response, expected fields, and password omission.
+# Then — HTTP 201, core user fields present, and password absent from response body.
 [ "$HTTP_STATUS" = "201" ]
 grep -F "\"username\":\"${USERNAME}\"" "$RESPONSE_FILE" >/dev/null
 grep -F "\"email\":\"${EMAIL}\"" "$RESPONSE_FILE" >/dev/null
 grep -F "\"fullName\":\"${FULL_NAME}\"" "$RESPONSE_FILE" >/dev/null
+grep -F '"id":' "$RESPONSE_FILE" >/dev/null
 if grep -F '"password":' "$RESPONSE_FILE" >/dev/null; then
-  echo 'password field should not be present in signup response' >&2
+  echo 'password field unexpectedly present in signup response'
   exit 1
 fi
 
 echo "CODEVALID_TEST_ASSERTION_OK:signup_password_excluded_from_response"
 
-# Cleanup — no API or DB cleanup path exists for in-memory users; temp file removed by trap.
+# Cleanup — No cleanup endpoint exists; temp file removed by trap.

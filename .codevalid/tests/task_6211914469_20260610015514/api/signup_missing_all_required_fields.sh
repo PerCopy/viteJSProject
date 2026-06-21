@@ -10,19 +10,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — prepare an empty JSON request body.
-: > /dev/null
+# Given — Use an empty JSON body to exercise required-field validation.
+:
 
-# When — send signup request with no required fields.
+# When — POST /api/auth/signup with empty JSON body.
 HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/auth/signup" \
   -H 'Content-Type: application/json' \
   --data '{}')"
 
-# Then — verify 400 response and required-fields message.
+# Then — HTTP 400 with required-fields validation message.
 [ "$HTTP_STATUS" = "400" ]
 grep -F '"message":"Username, email, password, and full name are required."' "$RESPONSE_FILE" >/dev/null
 
 echo "CODEVALID_TEST_ASSERTION_OK:signup_missing_all_required_fields"
 
-# Cleanup — temp file removed by trap.
+# Cleanup — Temp file removed by trap.

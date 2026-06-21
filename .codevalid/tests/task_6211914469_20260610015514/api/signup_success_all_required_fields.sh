@@ -14,16 +14,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Given — prepare unique required-field values so no existing in-memory user conflicts.
-: > /dev/null
+# Given — Prepare unique required signup fields so no prior in-memory user can conflict.
+:
 
-# When — send signup request with all required fields.
+# When — POST /api/auth/signup with all required fields.
 HTTP_STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/auth/signup" \
   -H 'Content-Type: application/json' \
   --data "{\"username\":\"${USERNAME}\",\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\",\"fullName\":\"${FULL_NAME}\"}")"
 
-# Then — verify 201 response, returned user fields, token, and password omission.
+# Then — HTTP 201 with user object fields, token, and no password in response.
 [ "$HTTP_STATUS" = "201" ]
 grep -F '"user":' "$RESPONSE_FILE" >/dev/null
 grep -F '"id":' "$RESPONSE_FILE" >/dev/null
@@ -34,10 +34,10 @@ grep -F '"phone":""' "$RESPONSE_FILE" >/dev/null
 grep -F '"organization":""' "$RESPONSE_FILE" >/dev/null
 grep -F '"token":"simulated-jwt-token-for-' "$RESPONSE_FILE" >/dev/null
 if grep -F '"password":' "$RESPONSE_FILE" >/dev/null; then
-  echo 'password field should not be present in response' >&2
+  echo 'password field unexpectedly present in signup response'
   exit 1
 fi
 
 echo "CODEVALID_TEST_ASSERTION_OK:signup_success_all_required_fields"
 
-# Cleanup — no API or DB cleanup path exists for in-memory users; temp file removed by trap.
+# Cleanup — No cleanup endpoint exists; temp file removed by trap.

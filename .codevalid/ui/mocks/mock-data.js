@@ -1,7 +1,6 @@
 /**
- * Mock data for Playwright tests.
- * Mirrors the shape returned by the real Express backend so tests
- * can run fully isolated without a live API server.
+ * Mock data definitions for CodeValid UI tests.
+ * Used by mock-handlers.js to intercept and respond to API requests.
  */
 
 const today = new Date();
@@ -31,7 +30,7 @@ export const mockEvents = [
     id: "event_1",
     title: "Global Tech Summit 2026",
     description:
-      "The premier event for AI, cloud computing, and next-gen web technologies.",
+      "The premier event for AI, cloud computing, and next-gen web technologies. Hear from world-class industry leaders.",
     startDate: fmt(new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000)),
     endDate: fmt(new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000)),
     location: "San Francisco, CA & Virtual",
@@ -41,7 +40,7 @@ export const mockEvents = [
     id: "event_2",
     title: "React & Modern Web Design Workshop",
     description:
-      "Hands-on workshop focusing on component-based development and high-performance frontend engineering.",
+      "Hands-on workshop focusing on component-based development, animations, and high-performance frontend engineering.",
     startDate: fmt(new Date(today.getTime() + 10 * 24 * 60 * 60 * 1000)),
     endDate: fmt(new Date(today.getTime() + 12 * 24 * 60 * 60 * 1000)),
     location: "Austin, TX",
@@ -82,44 +81,10 @@ export const mockRegistrations = {
   event_3: [],
 };
 
-/** Pre-seeded credentials for the sign-in test */
+/** Credentials accepted by the mock sign-in handler */
 export const mockCredentials = {
-  valid: { email: "john@example.com", password: "password123" },
-  invalid: { email: "nobody@nowhere.com", password: "wrongpass" },
-};
-
-/** Mock API responses */
-export const mockResponses = {
-  signIn: {
-    success: {
-      user: mockUsers[0],
-      token: `simulated-jwt-token-for-${mockUsers[0].id}`,
-    },
-    failure: { message: "Invalid email or password." },
-  },
-  signUp: {
-    success: {
-      user: {
-        id: "user_new",
-        username: "newuser",
-        email: "newuser@example.com",
-        fullName: "New User",
-        phone: "+1 (555) 000-0000",
-        organization: "Test Org",
-      },
-      token: "simulated-jwt-token-for-user_new",
-    },
-  },
-  events: mockEvents,
-  registration: {
-    success: {
-      id: "reg_new",
-      eventId: "event_1",
-      name: "Test Attendee",
-      email: "attendee@test.com",
-      phone: "+1 (555) 999-8888",
-      registeredAt: new Date().toISOString(),
-    },
-    duplicate: { message: "This email is already registered for this event." },
-  },
+  email: "john@example.com",
+  password: "password123",
+  user: mockUsers[0],
+  token: "simulated-jwt-token-for-user_1",
 };

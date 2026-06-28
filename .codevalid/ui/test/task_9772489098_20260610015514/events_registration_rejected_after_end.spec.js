@@ -1,14 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { ExecutionRecorder } from "../helpers/execution-recorder.js";
+import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
 
 const TEST_ID = "events_registration_rejected_after_end";
-const EVENT_ID = "event_closed_window";
+const EVENT_ID = "event_after_end";
 const FIXED_ISO = "2024-06-25T12:00:00.000Z";
 
 const eventRecord = {
   id: EVENT_ID,
   title: "Summer Innovation Summit",
-  description: "Past event with closed registration",
+  description: "Event already ended",
   startDate: "2024-06-10",
   endDate: "2024-06-20",
   location: "Hall A",
@@ -17,20 +17,20 @@ const eventRecord = {
 
 const initialRegistrations = [
   {
-    id: "reg-existing-1",
-    eventId: EVENT_ID,
-    name: "Jordan Kim",
-    email: "jordan@example.com",
-    phone: "+1 (555) 111-2222",
-    registeredAt: "2024-06-18T09:00:00.000Z",
-  },
-  {
     id: "reg-existing-2",
     eventId: EVENT_ID,
     name: "Morgan Lee",
     email: "morgan@example.com",
     phone: "+1 (555) 222-1111",
-    registeredAt: "2024-06-19T10:00:00.000Z",
+    registeredAt: "2024-06-14T10:00:00.000Z",
+  },
+  {
+    id: "reg-existing-1",
+    eventId: EVENT_ID,
+    name: "Jordan Kim",
+    email: "jordan@example.com",
+    phone: "+1 (555) 111-2222",
+    registeredAt: "2024-06-13T09:00:00.000Z",
   },
 ];
 
@@ -75,8 +75,6 @@ async function seedAuthenticatedSession(page) {
 }
 
 async function setupScenarioMocks(page) {
-  const registrations = [...initialRegistrations];
-
   await page.route("**/api/events", async (route) => {
     if (route.request().method() !== "GET") {
       await route.continue();
@@ -99,7 +97,7 @@ async function setupScenarioMocks(page) {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(registrations),
+      body: JSON.stringify(initialRegistrations),
     });
   });
 
@@ -113,7 +111,7 @@ async function setupScenarioMocks(page) {
       status: 400,
       contentType: "application/json",
       body: JSON.stringify({
-        message: `Registration is closed. The event ended on ${eventRecord.endDate}.`,
+        message: "Registration is closed. The event ended on 2024-06-20.",
       }),
     });
   });
@@ -126,29 +124,26 @@ test("Registration Blocked When Current Date Is After Event End", async ({ page 
   await freezeTime(page, FIXED_ISO);
   await seedAuthenticatedSession(page);
 
-  await recorder.step("Register mocked event and rejection APIs for post-end registration");
+  await recorder.step("Register mocked APIs for a closed event");
   await setupScenarioMocks(page);
 
-  await recorder.step("Navigate directly to the protected home registration route");
+  await recorder.step("Navigate directly to the home registration page");
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Registration Desk" })).toBeVisible();
-  await expect(page.getByText("Registration closed on 2024-06-20")).toBeVisible();
-  await expect(page.getByText("Registration Active")).toHaveCount(0);
-  await expect(page.getByText("Registration opens on", { exact: false })).toHaveCount(0);
+  await expect(page.getByText("Registration Closed", { exact: true })).toBeVisible();
+  await expect(page.getByText("Registration closed on 2024-06-20.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Confirm Registration/i })).toBeDisabled();
+  await expect(page.getByPlaceholder("Jane Smith")).toBeDisabled();
+  await expect(page.getByPlaceholder("jane@smith.com")).toBeDisabled();
+  await expect(page.getByPlaceholder("+1 \(555\) 000-0000")).toBeDisabled();
   await expect(page.getByText("2 Total")).toBeVisible();
 
-  await recorder.step("Attempt to register attendee after registration window has closed");
-  await page.getByPlaceholder("Jane Smith").fill("Taylor Swift");
-  await page.getByPlaceholder("jane@smith.com").fill("taylor@example.com");
-  await page.getByPlaceholder("+1 (555) 000-0000").fill("+1 (555) 999-8888");
-  await page.getByRole("button", { name: /Confirm Registration/i }).click();
-
-  await recorder.step("Verify registration is blocked and attendee count remains unchanged");
-  await expect(page.getByText("Registration is closed. The event ended on 2024-06-20.")).toBeVisible();
+  await recorder.step("Verify no registration is recorded for a closed event");
+  await expect(page.getByRole("cell", { name: "Morgan Lee" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Jordan Kim" })).toBeVisible();
+  await expect(page.getByText("Attendee registered successfully!")).toHaveCount(0);
   await expect(page.getByText("3 Total")).toHaveCount(0);
-  await expect(page.getByText("2 Total")).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Taylor Swift" })).toHaveCount(0);
 
   console.log(`CODEVALID_TEST_ASSERTION_OK:${TEST_ID}`);
   await recorder.save(testInfo);

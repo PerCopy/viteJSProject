@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ExecutionRecorder } from "../helpers/execution-recorder.js";
+import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
 
 const TEST_ID = "events_registration_happy_path_within_range";
 const EVENT_ID = "event_range_open";

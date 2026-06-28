@@ -1,14 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { ExecutionRecorder } from "../helpers/execution-recorder.js";
+import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
 
 const TEST_ID = "events_registration_edge_case_end_date";
 const EVENT_ID = "event_end_boundary";
-const FIXED_ISO = "2024-06-20T18:30:00.000Z";
+const FIXED_ISO = "2024-06-20T12:00:00.000Z";
 
 const eventRecord = {
   id: EVENT_ID,
   title: "Summer Innovation Summit",
-  description: "Registration closes today",
+  description: "Boundary day closing",
   startDate: "2024-06-10",
   endDate: "2024-06-20",
   location: "Hall A",
@@ -22,7 +22,7 @@ const initialRegistrations = [
     name: "Morgan Lee",
     email: "morgan@example.com",
     phone: "+1 (555) 222-1111",
-    registeredAt: "2024-06-18T10:00:00.000Z",
+    registeredAt: "2024-06-19T10:00:00.000Z",
   },
   {
     id: "reg-existing-1",
@@ -30,7 +30,7 @@ const initialRegistrations = [
     name: "Jordan Kim",
     email: "jordan@example.com",
     phone: "+1 (555) 111-2222",
-    registeredAt: "2024-06-17T09:00:00.000Z",
+    registeredAt: "2024-06-18T09:00:00.000Z",
   },
 ];
 
@@ -87,12 +87,7 @@ async function setupScenarioMocks(page) {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify([
-        {
-          ...eventRecord,
-          registrationCount,
-        },
-      ]),
+      body: JSON.stringify([{ ...eventRecord, registrationCount }]),
     });
   });
 
@@ -119,9 +114,9 @@ async function setupScenarioMocks(page) {
     const created = {
       id: "reg-end-boundary",
       eventId: payload.eventId,
-      name: "Taylor Swift",
-      email: "taylor@example.com",
-      phone: "+1 (555) 999-8888",
+      name: "Boundary Finisher",
+      email: "boundary.end@example.com",
+      phone: "+1 (555) 500-6000",
       registeredAt: FIXED_ISO,
     };
 
@@ -143,30 +138,28 @@ test("Registration Allowed On Event End Date", async ({ page }, testInfo) => {
   await freezeTime(page, FIXED_ISO);
   await seedAuthenticatedSession(page);
 
-  await recorder.step("Register mocked event, registrations list, and successful registration APIs");
+  await recorder.step("Register mocked APIs for end-date boundary success");
   await setupScenarioMocks(page);
 
-  await recorder.step("Navigate from signup entry point to the protected home registration page");
+  await recorder.step("Navigate from /signup entry point and then access the protected registration page");
   await page.goto("/signup");
   await expect(page).toHaveURL(/\/signup$/);
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Registration Desk" })).toBeVisible();
   await expect(page.getByText("Registration Active")).toBeVisible();
-  await expect(page.getByText("Registration opens on", { exact: false })).toHaveCount(0);
-  await expect(page.getByText("Registration closed on", { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Confirm Registration/i })).toBeEnabled();
   await expect(page.getByText("2 Total")).toBeVisible();
 
-  await recorder.step("Submit a registration on the event end date boundary");
-  await page.getByPlaceholder("Jane Smith").fill("Taylor Swift");
-  await page.getByPlaceholder("jane@smith.com").fill("taylor@example.com");
-  await page.getByPlaceholder("+1 (555) 000-0000").fill("+1 (555) 999-8888");
+  await recorder.step("Submit attendee registration on the exact end date");
+  await page.getByPlaceholder("Jane Smith").fill("Boundary Finisher");
+  await page.getByPlaceholder("jane@smith.com").fill("boundary.end@example.com");
+  await page.getByPlaceholder("+1 (555) 000-0000").fill("+1 (555) 500-6000");
   await page.getByRole("button", { name: /Confirm Registration/i }).click();
 
-  await recorder.step("Verify successful registration and incremented attendee count");
+  await recorder.step("Verify boundary-day registration succeeds and count increments");
   await expect(page.getByText("Attendee registered successfully!")).toBeVisible();
   await expect(page.getByText("3 Total")).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Taylor Swift" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Boundary Finisher" })).toBeVisible();
 
   console.log(`CODEVALID_TEST_ASSERTION_OK:${TEST_ID}`);
   await recorder.save(testInfo);

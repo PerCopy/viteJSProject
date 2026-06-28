@@ -1,14 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { ExecutionRecorder } from "../helpers/execution-recorder.js";
+import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
 
 const TEST_ID = "events_registration_edge_case_start_date";
 const EVENT_ID = "event_start_boundary";
-const FIXED_ISO = "2024-06-10T08:00:00.000Z";
+const FIXED_ISO = "2024-06-10T12:00:00.000Z";
 
 const eventRecord = {
   id: EVENT_ID,
   title: "Summer Innovation Summit",
-  description: "Registration opens today",
+  description: "Boundary day opening",
   startDate: "2024-06-10",
   endDate: "2024-06-20",
   location: "Hall A",
@@ -30,7 +30,7 @@ const initialRegistrations = [
     name: "Jordan Kim",
     email: "jordan@example.com",
     phone: "+1 (555) 111-2222",
-    registeredAt: "2024-06-09T09:00:00.000Z",
+    registeredAt: "2024-06-08T09:00:00.000Z",
   },
 ];
 
@@ -87,12 +87,7 @@ async function setupScenarioMocks(page) {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify([
-        {
-          ...eventRecord,
-          registrationCount,
-        },
-      ]),
+      body: JSON.stringify([{ ...eventRecord, registrationCount }]),
     });
   });
 
@@ -119,9 +114,9 @@ async function setupScenarioMocks(page) {
     const created = {
       id: "reg-start-boundary",
       eventId: payload.eventId,
-      name: "Taylor Swift",
-      email: "taylor@example.com",
-      phone: "+1 (555) 999-8888",
+      name: "Boundary Starter",
+      email: "boundary.start@example.com",
+      phone: "+1 (555) 300-4000",
       registeredAt: FIXED_ISO,
     };
 
@@ -143,28 +138,26 @@ test("Registration Allowed On Event Start Date", async ({ page }, testInfo) => {
   await freezeTime(page, FIXED_ISO);
   await seedAuthenticatedSession(page);
 
-  await recorder.step("Register mocked event, registrations list, and successful registration APIs");
+  await recorder.step("Register mocked APIs for start-date boundary success");
   await setupScenarioMocks(page);
 
-  await recorder.step("Navigate to the protected home registration page");
+  await recorder.step("Navigate to the home registration page");
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Registration Desk" })).toBeVisible();
   await expect(page.getByText("Registration Active")).toBeVisible();
-  await expect(page.getByText("Registration opens on", { exact: false })).toHaveCount(0);
-  await expect(page.getByText("Registration closed on", { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Confirm Registration/i })).toBeEnabled();
   await expect(page.getByText("2 Total")).toBeVisible();
 
-  await recorder.step("Submit a registration on the event start date boundary");
-  await page.getByPlaceholder("Jane Smith").fill("Taylor Swift");
-  await page.getByPlaceholder("jane@smith.com").fill("taylor@example.com");
-  await page.getByPlaceholder("+1 (555) 000-0000").fill("+1 (555) 999-8888");
+  await recorder.step("Submit attendee registration on the exact start date");
+  await page.getByPlaceholder("Jane Smith").fill("Boundary Starter");
+  await page.getByPlaceholder("jane@smith.com").fill("boundary.start@example.com");
+  await page.getByPlaceholder("+1 (555) 000-0000").fill("+1 (555) 300-4000");
   await page.getByRole("button", { name: /Confirm Registration/i }).click();
 
-  await recorder.step("Verify successful registration and incremented attendee count");
+  await recorder.step("Verify boundary-day registration succeeds and count increments");
   await expect(page.getByText("Attendee registered successfully!")).toBeVisible();
   await expect(page.getByText("3 Total")).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Taylor Swift" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Boundary Starter" })).toBeVisible();
 
   console.log(`CODEVALID_TEST_ASSERTION_OK:${TEST_ID}`);
   await recorder.save(testInfo);

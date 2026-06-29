@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
-import { setupAuthenticatedSession, setupEventCreationScenario } from "../../helpers/mock-api.js";
+import { setupAuthenticatedSession, setupEventCreationScenario, mockHomePageApis } from "../../helpers/mock-api.js";
 
 test("Create Event via Navigation from Home Page", async ({ page }, testInfo) => {
   const recorder = new ExecutionRecorder({
@@ -8,6 +8,7 @@ test("Create Event via Navigation from Home Page", async ({ page }, testInfo) =>
     testName: "Create Event via Navigation from Home Page",
   });
 
+  const initialEvents = [];
   const createdEvent = {
     id: "event-annual-summit",
     title: "Annual Summit",
@@ -18,10 +19,11 @@ test("Create Event via Navigation from Home Page", async ({ page }, testInfo) =>
     registrationCount: 0,
   };
 
-  await recorder.step("Seed authenticated session and event mocks");
+  await recorder.step("Mock home page and event APIs");
   await setupAuthenticatedSession(page);
+  await mockHomePageApis(page, { upcomingEvents: [] });
   await setupEventCreationScenario(page, {
-    initialEvents: [],
+    initialEvents,
     expectedCreatePayload: {
       title: "Annual Summit",
       description: "Industry leaders gathering",
@@ -32,36 +34,41 @@ test("Create Event via Navigation from Home Page", async ({ page }, testInfo) =>
     createdEvent,
   });
 
-  await recorder.step("Navigate to home route");
+  await recorder.step("Navigate to home page");
   await page.goto("/");
-  await expect(page).toHaveURL(/\/$/);
 
-  await recorder.step("Use navbar to navigate to events");
-  await page.getByRole("link", { name: /Events Setup/i }).click();
+  await recorder.step("Navigate from home page to events page");
+  const eventsNav = page.getByRole("link", { name: /events/i }).first();
+  await expect(eventsNav).toBeVisible();
+  await eventsNav.click();
   await expect(page).toHaveURL(/\/events$/);
-  await expect(page.getByRole("heading", { name: "Events Management Setup" })).toBeVisible();
 
-  await recorder.step("Open create form and fill event details");
+  await recorder.step("Open the create event form");
   await page.getByRole("button", { name: "Create New Event" }).click();
+
+  await recorder.step("Enter event details");
   await page.getByLabel("Event Title *").fill("Annual Summit");
   await page.getByPlaceholder("Summarize event activities...").fill("Industry leaders gathering");
   await page.getByLabel("Location / Venue *").fill("San Francisco");
   await page.getByLabel("Start Date *").fill("2024-10-15");
   await page.getByLabel("End Date *").fill("2024-10-17");
 
-  await recorder.step("Publish the event");
+  await recorder.step("Submit the event form");
   await page.getByRole("button", { name: "Publish Event" }).click();
 
-  await recorder.step("Verify event appears and form resets");
+  await recorder.step("Verify the event appears and form resets");
   await expect(page.getByText("Event created successfully!")).toBeVisible();
   await expect(page.getByText("Annual Summit")).toBeVisible();
   await expect(page.getByText("Industry leaders gathering")).toBeVisible();
   await expect(page.getByText("San Francisco")).toBeVisible();
   await expect(page.getByText("2024-10-15 to 2024-10-17")).toBeVisible();
+  await expect(page.getByText("0 registered")).toBeVisible();
+  await expect(page.getByText("Title is required")).toHaveCount(0);
   await expect(page.getByLabel("Event Title *")).toHaveValue("");
   await expect(page.getByPlaceholder("Summarize event activities...")).toHaveValue("");
   await expect(page.getByLabel("Location / Venue *")).toHaveValue("");
-  await expect(page.getByText("Title is required")).toHaveCount(0);
+  await expect(page.getByLabel("Start Date *")).toHaveValue("");
+  await expect(page.getByLabel("End Date *")).toHaveValue("");
 
   console.log("CODEVALID_TEST_ASSERTION_OK:events_from_home_happy_path");
   await recorder.save(testInfo);

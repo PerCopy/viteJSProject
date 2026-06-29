@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
-import { setupAuthenticatedSession, setupEventCreationScenario } from "../../helpers/mock-api.js";
+import { setupUnauthenticatedSession, setupEventCreationScenario, mockSignUpPageApis } from "../../helpers/mock-api.js";
 
 test("Create Event via Navigation from SignUp Page", async ({ page }, testInfo) => {
   const recorder = new ExecutionRecorder({
@@ -8,6 +8,7 @@ test("Create Event via Navigation from SignUp Page", async ({ page }, testInfo) 
     testName: "Create Event via Navigation from SignUp Page",
   });
 
+  const initialEvents = [];
   const createdEvent = {
     id: "event-product-demo",
     title: "Product Demo",
@@ -18,9 +19,11 @@ test("Create Event via Navigation from SignUp Page", async ({ page }, testInfo) 
     registrationCount: 0,
   };
 
-  await recorder.step("Mock events API for signup-origin scenario");
+  await recorder.step("Mock sign-up page and event APIs");
+  await setupUnauthenticatedSession(page);
+  await mockSignUpPageApis(page);
   await setupEventCreationScenario(page, {
-    initialEvents: [],
+    initialEvents,
     expectedCreatePayload: {
       title: "Product Demo",
       description: "Live product walkthrough",
@@ -33,29 +36,35 @@ test("Create Event via Navigation from SignUp Page", async ({ page }, testInfo) 
 
   await recorder.step("Navigate to sign-up page");
   await page.goto("/signup");
-  await expect(page).toHaveURL(/\/signup$/);
 
-  await recorder.step("Seed auth after landing on sign-up and navigate to events");
-  await setupAuthenticatedSession(page);
-  await page.goto("/events");
-  await expect(page.getByRole("heading", { name: "Events Management Setup" })).toBeVisible();
+  await recorder.step("Navigate from sign-up page to events page");
+  const eventsNav = page.getByRole("link", { name: /events/i }).first();
+  await expect(eventsNav).toBeVisible();
+  await eventsNav.click();
+  await expect(page).toHaveURL(/\/events$/);
 
-  await recorder.step("Create a new event");
+  await recorder.step("Open create form and enter event details");
   await page.getByRole("button", { name: "Create New Event" }).click();
   await page.getByLabel("Event Title *").fill("Product Demo");
   await page.getByPlaceholder("Summarize event activities...").fill("Live product walkthrough");
   await page.getByLabel("Location / Venue *").fill("New York");
   await page.getByLabel("Start Date *").fill("2024-11-05");
   await page.getByLabel("End Date *").fill("2024-11-06");
-  await page.getByRole("button", { name: "Publish Event" }).click();
 
-  await recorder.step("Verify created event details and reset form");
+  await recorder.step("Submit form and verify created event");
+  await page.getByRole("button", { name: "Publish Event" }).click();
   await expect(page.getByText("Event created successfully!")).toBeVisible();
   await expect(page.getByText("Product Demo")).toBeVisible();
   await expect(page.getByText("Live product walkthrough")).toBeVisible();
   await expect(page.getByText("New York")).toBeVisible();
   await expect(page.getByText("2024-11-05 to 2024-11-06")).toBeVisible();
+  await expect(page.getByText("0 registered")).toBeVisible();
+  await expect(page.getByText("Title is required")).toHaveCount(0);
   await expect(page.getByLabel("Event Title *")).toHaveValue("");
+  await expect(page.getByPlaceholder("Summarize event activities...")).toHaveValue("");
+  await expect(page.getByLabel("Location / Venue *")).toHaveValue("");
+  await expect(page.getByLabel("Start Date *")).toHaveValue("");
+  await expect(page.getByLabel("End Date *")).toHaveValue("");
 
   console.log("CODEVALID_TEST_ASSERTION_OK:events_from_signup_happy_path");
   await recorder.save(testInfo);

@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { ExecutionRecorder } from "../helpers/execution-recorder.js";
-import { seedAuthenticatedSession, mockEventScenario } from "../helpers/mock-api.js";
+import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
+import { seedAuthenticatedSession, mockEventScenario } from "../../helpers/mock-api.js";
 
 test("Create Event Successfully With Valid Details", async ({ page }, testInfo) => {
-  const recorder = new ExecutionRecorder("create_event_successfully_with_valid_data", testInfo);
+  const recorder = new ExecutionRecorder("create_event_successfully_with_valid_data", "Create Event Successfully With Valid Details");
 
   const eventDetails = {
     id: "event-annual-tech-conference",
@@ -47,8 +47,8 @@ test("Create Event Successfully With Valid Details", async ({ page }, testInfo) 
   });
 
   await recorder.step("Enter start and end dates", async () => {
-    await page.getByLabel("Start Date *").fill(eventDetails.startDate);
-    await page.getByLabel("End Date *").fill(eventDetails.endDate);
+    await page.locator('input[name="startDate"]').fill(eventDetails.startDate);
+    await page.locator('input[name="endDate"]').fill(eventDetails.endDate);
   });
 
   await recorder.step("Submit the event creation form", async () => {

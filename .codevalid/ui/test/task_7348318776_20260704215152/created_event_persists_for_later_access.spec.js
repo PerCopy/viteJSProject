@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { ExecutionRecorder } from "../helpers/execution-recorder.js";
+import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
 import {
   mockEventScenario,
   seedAuthenticatedSession,
-} from "../helpers/mock-api.js";
+} from "../../helpers/mock-api.js";
 
 test("Created Event Is Available After Creation", async ({ page }, testInfo) => {
   const recorder = new ExecutionRecorder("created_event_persists_for_later_access", "Created Event Is Available After Creation");
@@ -36,8 +36,8 @@ test("Created Event Is Available After Creation", async ({ page }, testInfo) => 
   await page.getByPlaceholder("e.g. Spring Hackathon 2026").fill(persistedEvent.title);
   await page.getByPlaceholder("Summarize event activities...").fill(persistedEvent.description);
   await page.getByPlaceholder("e.g. Auditorium A or Virtual").fill(persistedEvent.location);
-  await page.getByLabel("Start Date *").fill(persistedEvent.startDate);
-  await page.getByLabel("End Date *").fill(persistedEvent.endDate);
+  await page.locator('input[name="startDate"]').fill(persistedEvent.startDate);
+  await page.locator('input[name="endDate"]').fill(persistedEvent.endDate);
 
   await recorder.step("Complete the event submission");
   await page.getByRole("button", { name: "Publish Event" }).click();

@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { ExecutionRecorder } from "../helpers/execution-recorder.js";
-import { seedAuthenticatedSession, mockEventScenario } from "../helpers/mock-api.js";
+import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
+import { seedAuthenticatedSession, mockEventScenario } from "../../helpers/mock-api.js";
 
 test("Create Event With Long Description And Location Values", async ({ page }, testInfo) => {
-  const recorder = new ExecutionRecorder("create_event_with_long_text_values", testInfo);
+  const recorder = new ExecutionRecorder("create_event_with_long_text_values", "Create Event With Long Description And Location Values");
 
   const eventDetails = {
     id: "event-enterprise-planning-summit",
@@ -33,8 +33,8 @@ test("Create Event With Long Description And Location Values", async ({ page }, 
     await page.getByPlaceholder("e.g. Spring Hackathon 2026").fill(eventDetails.title);
     await page.getByPlaceholder("Summarize event activities...").fill(eventDetails.description);
     await page.getByPlaceholder("e.g. Auditorium A or Virtual").fill(eventDetails.location);
-    await page.getByLabel("Start Date *").fill(eventDetails.startDate);
-    await page.getByLabel("End Date *").fill(eventDetails.endDate);
+    await page.locator('input[name="startDate"]').fill(eventDetails.startDate);
+    await page.locator('input[name="endDate"]').fill(eventDetails.endDate);
   });
 
   await recorder.step("Submit the event creation form", async () => {

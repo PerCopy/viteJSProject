@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { ExecutionRecorder } from "../helpers/execution-recorder.js";
+import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
 import {
   mockEventScenario,
   seedAuthenticatedSession,
-} from "../helpers/mock-api.js";
+} from "../../helpers/mock-api.js";
 
 test("Create Event Using Same Start and End Date", async ({ page }, testInfo) => {
   const recorder = new ExecutionRecorder("create_event_with_same_start_and_end_date", "Create Event Using Same Start and End Date");
@@ -41,10 +41,10 @@ test("Create Event Using Same Start and End Date", async ({ page }, testInfo) =>
   await page.getByPlaceholder("e.g. Auditorium A or Virtual").fill(singleDayEvent.location);
 
   await recorder.step("Enter a start date");
-  await page.getByLabel("Start Date *").fill(singleDayEvent.startDate);
+  await page.locator('input[name="startDate"]').fill(singleDayEvent.startDate);
 
   await recorder.step("Enter the same value for the end date");
-  await page.getByLabel("End Date *").fill(singleDayEvent.endDate);
+  await page.locator('input[name="endDate"]').fill(singleDayEvent.endDate);
 
   await recorder.step("Submit the event creation form");
   await page.getByRole("button", { name: "Publish Event" }).click();

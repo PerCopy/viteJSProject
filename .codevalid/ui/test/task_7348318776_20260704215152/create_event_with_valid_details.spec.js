@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { ExecutionRecorder } from "../helpers/execution-recorder.js";
+import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
 import {
   mockEventScenario,
   seedAuthenticatedSession,
-} from "../helpers/mock-api.js";
+} from "../../helpers/mock-api.js";
 
 test("Create Event Successfully With Valid Inputs", async ({ page }, testInfo) => {
   const recorder = new ExecutionRecorder("create_event_with_valid_details", "Create Event Successfully With Valid Inputs");
@@ -46,10 +46,10 @@ test("Create Event Successfully With Valid Inputs", async ({ page }, testInfo) =
   await page.getByPlaceholder("e.g. Auditorium A or Virtual").fill(eventPayload.location);
 
   await recorder.step("Enter a valid start date");
-  await page.getByLabel("Start Date *").fill(eventPayload.startDate);
+  await page.locator('input[name="startDate"]').fill(eventPayload.startDate);
 
   await recorder.step("Enter a valid end date later than or equal to the start date");
-  await page.getByLabel("End Date *").fill(eventPayload.endDate);
+  await page.locator('input[name="endDate"]').fill(eventPayload.endDate);
 
   await recorder.step("Submit the event creation form");
   await page.getByRole("button", { name: "Publish Event" }).click();

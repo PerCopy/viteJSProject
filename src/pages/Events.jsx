@@ -55,11 +55,6 @@ export default function Events() {
     if (!formData.startDate) newErrors.startDate = "Start date is required";
     if (!formData.endDate) newErrors.endDate = "End date is required";
 
-    if (formData.startDate && formData.endDate) {
-      if (new Date(formData.startDate) > new Date(formData.endDate)) {
-        newErrors.endDate = "End date must be after or equal to start date";
-      }
-    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;

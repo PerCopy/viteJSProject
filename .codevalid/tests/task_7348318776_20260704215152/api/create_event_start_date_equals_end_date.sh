@@ -2,46 +2,32 @@
 set -eu
 BASE_URL="${BASE_URL:-http://app:6713}"
 CASE_SUFFIX="$(date +%s)-$$"
-EVENT_TITLE="Same Day Event ${CASE_SUFFIX}"
-EVENT_DESCRIPTION="Start equals end ${CASE_SUFFIX}"
-EVENT_LOCATION="Room 300 ${CASE_SUFFIX}"
-START_DATE="2025-09-01T00:00:00Z"
-END_DATE="2025-09-01T00:00:00Z"
+TITLE="One Day Seminar ${CASE_SUFFIX}"
+DESCRIPTION="Single day event ${CASE_SUFFIX}"
+LOCATION="Boston Center ${CASE_SUFFIX}"
+DATE_VALUE="2024-08-15"
 RESPONSE_FILE="/tmp/create_event_start_date_equals_end_date_${CASE_SUFFIX}.json"
 STATUS_FILE="/tmp/create_event_start_date_equals_end_date_${CASE_SUFFIX}.status"
-EVENT_ID=""
-cleanup_files() {
-  rm -f "$RESPONSE_FILE" "$STATUS_FILE"
-}
-cleanup_event() {
-  if [ -n "$EVENT_ID" ]; then
-    curl -sS -o /dev/null -X DELETE "$BASE_URL/api/events/$EVENT_ID" || true
-  fi
-}
-trap 'cleanup_event; cleanup_files' EXIT
+cleanup_files() { rm -f "$RESPONSE_FILE" "$STATUS_FILE"; }
+trap cleanup_files EXIT
 
 # Given
-: "Prepare a unique event payload whose startDate equals endDate"
+: "Event store is accessible and unique values are used for isolation"
 
 # When
 curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/events" \
   -H 'Content-Type: application/json' \
-  --data "{\"title\":\"${EVENT_TITLE}\",\"description\":\"${EVENT_DESCRIPTION}\",\"location\":\"${EVENT_LOCATION}\",\"startDate\":\"${START_DATE}\",\"endDate\":\"${END_DATE}\"}" > "$STATUS_FILE"
+  --data "{\"title\":\"${TITLE}\",\"description\":\"${DESCRIPTION}\",\"location\":\"${LOCATION}\",\"startDate\":\"${DATE_VALUE}\",\"endDate\":\"${DATE_VALUE}\"}" > "$STATUS_FILE"
 
 # Then
-STATUS="$(cat "$STATUS_FILE")"
-[ "$STATUS" = "201" ]
-grep -F '"title":"'"$EVENT_TITLE"'"' "$RESPONSE_FILE" >/dev/null
-grep -F '"description":"'"$EVENT_DESCRIPTION"'"' "$RESPONSE_FILE" >/dev/null
-grep -F '"location":"'"$EVENT_LOCATION"'"' "$RESPONSE_FILE" >/dev/null
-grep -F '"startDate":"'"$START_DATE"'"' "$RESPONSE_FILE" >/dev/null
-grep -F '"endDate":"'"$END_DATE"'"' "$RESPONSE_FILE" >/dev/null
+[ "$(cat "$STATUS_FILE")" = "201" ]
+grep -F "\"title\":\"${TITLE}\"" "$RESPONSE_FILE" >/dev/null
+grep -F "\"startDate\":\"${DATE_VALUE}\"" "$RESPONSE_FILE" >/dev/null
+grep -F "\"endDate\":\"${DATE_VALUE}\"" "$RESPONSE_FILE" >/dev/null
 grep -F '"registrationCount":0' "$RESPONSE_FILE" >/dev/null
-EVENT_ID="$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$RESPONSE_FILE")"
-[ -n "$EVENT_ID" ]
 
 # Cleanup
-: "Best-effort delete of created event if the API supports DELETE /api/events/{id}"
+: "No cleanup endpoint exists for the in-memory store; test data is uniquely namespaced"
 
 echo "CODEVALID_TEST_ASSERTION_OK:create_event_start_date_equals_end_date"

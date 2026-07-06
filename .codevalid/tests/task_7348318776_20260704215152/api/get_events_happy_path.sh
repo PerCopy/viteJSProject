@@ -2,66 +2,60 @@
 set -eu
 BASE_URL="${BASE_URL:-http://app:6713}"
 CASE_SUFFIX="$(date +%s)-$$"
-EVENT_ONE_TITLE="Tech Conference ${CASE_SUFFIX}"
-EVENT_TWO_TITLE="Music Festival ${CASE_SUFFIX}"
-RESPONSE_ONE="/tmp/get_events_happy_path_create_one_${CASE_SUFFIX}.json"
-STATUS_ONE="/tmp/get_events_happy_path_create_one_${CASE_SUFFIX}.status"
-RESPONSE_TWO="/tmp/get_events_happy_path_create_two_${CASE_SUFFIX}.json"
-STATUS_TWO="/tmp/get_events_happy_path_create_two_${CASE_SUFFIX}.status"
-LIST_RESPONSE="/tmp/get_events_happy_path_list_${CASE_SUFFIX}.json"
-LIST_STATUS="/tmp/get_events_happy_path_list_${CASE_SUFFIX}.status"
+RESPONSE_FILE="/tmp/get_events_happy_path_${CASE_SUFFIX}.json"
+STATUS_FILE="/tmp/get_events_happy_path_${CASE_SUFFIX}.status"
+CREATE_STATUS_ONE="/tmp/get_events_happy_path_create_one_${CASE_SUFFIX}.status"
+CREATE_STATUS_TWO="/tmp/get_events_happy_path_create_two_${CASE_SUFFIX}.status"
+CREATE_STATUS_THREE="/tmp/get_events_happy_path_create_three_${CASE_SUFFIX}.status"
 
 cleanup_files() {
-  rm -f "$RESPONSE_ONE" "$STATUS_ONE" "$RESPONSE_TWO" "$STATUS_TWO" "$LIST_RESPONSE" "$LIST_STATUS"
+  rm -f "$RESPONSE_FILE" "$STATUS_FILE" \
+    "$CREATE_STATUS_ONE" "$CREATE_STATUS_TWO" "$CREATE_STATUS_THREE"
 }
 trap cleanup_files EXIT
 
-# Given — create isolated events through the public API so they are available for later access
-curl -sS -o "$RESPONSE_ONE" -w '%{http_code}' \
-  -X POST "$BASE_URL/api/events" \
+# Given
+TITLE_EARLY="CV Happy Early ${CASE_SUFFIX}"
+TITLE_MID="CV Happy Mid ${CASE_SUFFIX}"
+TITLE_LATE="CV Happy Late ${CASE_SUFFIX}"
+
+curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/api/events" \
   -H 'Content-Type: application/json' \
-  --data "{\"title\":\"${EVENT_ONE_TITLE}\",\"description\":\"Annual tech event\",\"location\":\"San Francisco\",\"startDate\":\"2024-06-01\",\"endDate\":\"2024-06-03\"}" > "$STATUS_ONE"
-[ "$(cat "$STATUS_ONE")" = "201" ]
-grep -F '"title":"'"${EVENT_ONE_TITLE}"'"' "$RESPONSE_ONE" >/dev/null
-grep -F '"registrationCount":0' "$RESPONSE_ONE" >/dev/null
+  --data "{\"title\":\"${TITLE_MID}\",\"description\":\"mid event\",\"location\":\"Venue A\",\"startDate\":\"2024-03-15\",\"endDate\":\"2024-03-16\"}" > "$CREATE_STATUS_ONE"
+[ "$(cat "$CREATE_STATUS_ONE")" = "201" ]
 
-curl -sS -o "$RESPONSE_TWO" -w '%{http_code}' \
-  -X POST "$BASE_URL/api/events" \
+curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/api/events" \
   -H 'Content-Type: application/json' \
-  --data "{\"title\":\"${EVENT_TWO_TITLE}\",\"description\":\"Summer music festival\",\"location\":\"Los Angeles\",\"startDate\":\"2024-07-15\",\"endDate\":\"2024-07-17\"}" > "$STATUS_TWO"
-[ "$(cat "$STATUS_TWO")" = "201" ]
-grep -F '"title":"'"${EVENT_TWO_TITLE}"'"' "$RESPONSE_TWO" >/dev/null
-grep -F '"registrationCount":0' "$RESPONSE_TWO" >/dev/null
+  --data "{\"title\":\"${TITLE_EARLY}\",\"description\":\"early event\",\"location\":\"Venue B\",\"startDate\":\"2024-02-10\",\"endDate\":\"2024-02-11\"}" > "$CREATE_STATUS_TWO"
+[ "$(cat "$CREATE_STATUS_TWO")" = "201" ]
 
-# When — retrieve the events list
-curl -sS -o "$LIST_RESPONSE" -w '%{http_code}' \
-  "$BASE_URL/api/events" > "$LIST_STATUS"
+curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE_URL/api/events" \
+  -H 'Content-Type: application/json' \
+  --data "{\"title\":\"${TITLE_LATE}\",\"description\":\"late event\",\"location\":\"Venue C\",\"startDate\":\"2024-04-20\",\"endDate\":\"2024-04-21\"}" > "$CREATE_STATUS_THREE"
+[ "$(cat "$CREATE_STATUS_THREE")" = "201" ]
 
-# Then — verify the created events are returned, sorted by startDate ascending, and include counts
-STATUS="$(cat "$LIST_STATUS")"
-[ "$STATUS" = "200" ]
-grep -F '"title":"'"${EVENT_ONE_TITLE}"'"' "$LIST_RESPONSE" >/dev/null
-grep -F '"title":"'"${EVENT_TWO_TITLE}"'"' "$LIST_RESPONSE" >/dev/null
-grep -F '"location":"San Francisco"' "$LIST_RESPONSE" >/dev/null
-grep -F '"location":"Los Angeles"' "$LIST_RESPONSE" >/dev/null
-grep -F '"startDate":"2024-06-01"' "$LIST_RESPONSE" >/dev/null
-grep -F '"startDate":"2024-07-15"' "$LIST_RESPONSE" >/dev/null
-grep -F '"registrationCount":0' "$LIST_RESPONSE" >/dev/null
+# When
+curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' "$BASE_URL/api/events" > "$STATUS_FILE"
 
-python - <<'PY' "$LIST_RESPONSE" "$EVENT_ONE_TITLE" "$EVENT_TWO_TITLE"
+# Then
+[ "$(cat "$STATUS_FILE")" = "200" ]
+python - "$RESPONSE_FILE" "$TITLE_EARLY" "$TITLE_MID" "$TITLE_LATE" <<'PY'
 import json, sys
-path, title1, title2 = sys.argv[1:4]
+path, early, mid, late = sys.argv[1:5]
 with open(path, 'r', encoding='utf-8') as f:
-    events = json.load(f)
-matching = [e for e in events if e.get('title') in (title1, title2)]
-assert len(matching) == 2, matching
-assert matching[0]['title'] == title1, matching
-assert matching[1]['title'] == title2, matching
-assert matching[0]['startDate'] <= matching[1]['startDate'], matching
-assert matching[0]['registrationCount'] == 0, matching
-assert matching[1]['registrationCount'] == 0, matching
+    data = json.load(f)
+assert isinstance(data, list), 'response is not a JSON array'
+lookup = {item['title']: item for item in data}
+for title in (early, mid, late):
+    assert title in lookup, f'missing event {title}'
+assert lookup[early]['registrationCount'] == 0
+assert lookup[mid]['registrationCount'] == 0
+assert lookup[late]['registrationCount'] == 0
+positions = {item['title']: idx for idx, item in enumerate(data) if item['title'] in (early, mid, late)}
+assert positions[early] < positions[mid] < positions[late], positions
 PY
 
-# Cleanup — no API delete exists for events in provided public API; test data remains in in-memory store only for container lifetime
-
 echo "CODEVALID_TEST_ASSERTION_OK:get_events_happy_path"
+
+# Cleanup
+# No cleanup endpoint exists for in-memory events; this test uses unique event titles for isolation.

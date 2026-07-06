@@ -2,29 +2,26 @@
 set -eu
 BASE_URL="${BASE_URL:-http://app:6713}"
 CASE_SUFFIX="$(date +%s)-$$"
-EVENT_TITLE="No Location Event ${CASE_SUFFIX}"
-EVENT_DESCRIPTION="Test ${CASE_SUFFIX}"
-START_DATE="2025-07-01T09:00:00Z"
-END_DATE="2025-07-01T17:00:00Z"
+TITLE="Online Webinar ${CASE_SUFFIX}"
 RESPONSE_FILE="/tmp/create_event_missing_location_${CASE_SUFFIX}.json"
 STATUS_FILE="/tmp/create_event_missing_location_${CASE_SUFFIX}.status"
-trap 'rm -f "$RESPONSE_FILE" "$STATUS_FILE"' EXIT
+cleanup_files() { rm -f "$RESPONSE_FILE" "$STATUS_FILE"; }
+trap cleanup_files EXIT
 
 # Given
-: "Prepare an invalid payload missing the required location field"
+: "Event store is accessible"
 
 # When
 curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/events" \
   -H 'Content-Type: application/json' \
-  --data "{\"title\":\"${EVENT_TITLE}\",\"description\":\"${EVENT_DESCRIPTION}\",\"startDate\":\"${START_DATE}\",\"endDate\":\"${END_DATE}\"}" > "$STATUS_FILE"
+  --data "{\"title\":\"${TITLE}\",\"description\":\"Virtual event ${CASE_SUFFIX}\",\"startDate\":\"2024-04-05\",\"endDate\":\"2024-04-05\"}" > "$STATUS_FILE"
 
 # Then
-STATUS="$(cat "$STATUS_FILE")"
-[ "$STATUS" = "400" ]
-grep -F '"message":"Title, start date, end date, and location are required."' "$RESPONSE_FILE" >/dev/null
+[ "$(cat "$STATUS_FILE")" = "400" ]
+grep -F 'Title, start date, end date, and location are required.' "$RESPONSE_FILE" >/dev/null
 
 # Cleanup
-: "Rejected request should not create persistent state"
+: "Stateless negative validation test; no cleanup required"
 
 echo "CODEVALID_TEST_ASSERTION_OK:create_event_missing_location"

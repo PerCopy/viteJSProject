@@ -2,15 +2,16 @@ import { test, expect } from "@playwright/test";
 import { ExecutionRecorder } from "../../helpers/execution-recorder.js";
 import { seedAuthenticatedSession } from "../../helpers/mock-api.js";
 
-test("Reject Event Creation When Start Date Equals End Date", async ({ page }, testInfo) => {
+test("Prevent Event Creation When Start Date Equals End Date", async ({ page }, testInfo) => {
   const recorder = new ExecutionRecorder(
     "prevent_event_creation_when_start_date_equals_end_date",
-    "Reject Event Creation When Start Date Equals End Date"
+    "Prevent Event Creation When Start Date Equals End Date"
   );
 
-  await recorder.recordStep("Seed authenticated session and register API mocks for equal date validation failure");
-  await seedAuthenticatedSession(page);
+  const apiErrorMessage = "Start date must be before end date";
 
+  await recorder.step("Seed authenticated session and mock equal date validation APIs");
+  await seedAuthenticatedSession(page);
   await page.route("**/api/events", async (route) => {
     const method = route.request().method().toUpperCase();
 
@@ -26,28 +27,36 @@ test("Reject Event Creation When Start Date Equals End Date", async ({ page }, t
     await route.fulfill({
       status: 400,
       contentType: "application/json",
-      body: JSON.stringify({ message: "Start date must be before end date" }),
+      body: JSON.stringify({ message: apiErrorMessage }),
     });
   });
 
-  await recorder.recordStep("Navigate to the Events page and open the create form");
+  await recorder.step("Open the Events page");
   await page.goto("/events");
   await expect(
     page.getByRole("heading", { name: "Events Management Setup" })
   ).toBeVisible();
-  await page.getByRole("button", { name: /create new event/i }).click();
 
-  await recorder.recordStep("Enter event details with equal start and end dates");
+  await recorder.step("Open the create event form");
+  await page.getByRole("button", { name: /Create New Event/i }).click();
+
+  await recorder.step("Enter invalid event details where start date equals end date");
   await page.locator('input[name="title"]').fill("Single Day Validation Event");
-  await page.locator('textarea[name="description"]').fill("Testing equal dates validation");
-  await page.locator('input[name="location"]').fill("Austin");
-  await page.locator('input[name="startDate"]').fill("2026-11-20");
-  await page.locator('input[name="endDate"]').fill("2026-11-20");
+  await page
+    .locator('textarea[name="description"]')
+    .fill("Validation test for equal dates");
+  await page.locator('input[name="location"]').fill("Boston");
+  await page.locator('input[name="startDate"]').fill("2026-10-05");
+  await page.locator('input[name="endDate"]').fill("2026-10-05");
 
-  await recorder.recordStep("Submit the form and verify validation error is shown");
-  await page.getByRole("button", { name: /publish event/i }).click();
-  await expect(page.getByText("Start date must be before end date")).toBeVisible();
+  await recorder.step("Submit the event creation form");
+  await page.getByRole("button", { name: /Publish Event/i }).click();
+
+  await recorder.step("Verify validation error is shown and no event record is created");
+  await expect(page.getByText(apiErrorMessage)).toBeVisible();
   await expect(page.getByText("Single Day Validation Event")).not.toBeVisible();
+  await expect(page.getByText("Boston")).not.toBeVisible();
+  await expect(page.getByText("2026-10-05 to 2026-10-05")).not.toBeVisible();
 
   console.log("CODEVALID_TEST_ASSERTION_OK:prevent_event_creation_when_start_date_equals_end_date");
   await recorder.save(testInfo);

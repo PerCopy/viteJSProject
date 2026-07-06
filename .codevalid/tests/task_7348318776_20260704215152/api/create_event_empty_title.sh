@@ -2,10 +2,9 @@
 set -eu
 BASE_URL="${BASE_URL:-http://app:6713}"
 CASE_SUFFIX="$(date +%s)-$$"
-TITLE="Workshop ${CASE_SUFFIX}"
-LOCATION="Chicago Training Center ${CASE_SUFFIX}"
-RESPONSE_FILE="/tmp/create_event_missing_start_date_${CASE_SUFFIX}.json"
-STATUS_FILE="/tmp/create_event_missing_start_date_${CASE_SUFFIX}.status"
+LOCATION="Denver Arena ${CASE_SUFFIX}"
+RESPONSE_FILE="/tmp/create_event_empty_title_${CASE_SUFFIX}.json"
+STATUS_FILE="/tmp/create_event_empty_title_${CASE_SUFFIX}.status"
 cleanup_files() { rm -f "$RESPONSE_FILE" "$STATUS_FILE"; }
 trap cleanup_files EXIT
 
@@ -16,7 +15,7 @@ trap cleanup_files EXIT
 curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/events" \
   -H 'Content-Type: application/json' \
-  --data "{\"title\":\"${TITLE}\",\"description\":\"Training session ${CASE_SUFFIX}\",\"location\":\"${LOCATION}\",\"endDate\":\"2024-07-20\"}" > "$STATUS_FILE"
+  --data "{\"title\":\"\",\"description\":\"Empty title test ${CASE_SUFFIX}\",\"location\":\"${LOCATION}\",\"startDate\":\"2024-11-01\",\"endDate\":\"2024-11-01\"}" > "$STATUS_FILE"
 
 # Then
 [ "$(cat "$STATUS_FILE")" = "400" ]
@@ -25,4 +24,4 @@ grep -F 'Title, start date, end date, and location are required.' "$RESPONSE_FIL
 # Cleanup
 : "Stateless negative validation test; no cleanup required"
 
-echo "CODEVALID_TEST_ASSERTION_OK:create_event_missing_start_date"
+echo "CODEVALID_TEST_ASSERTION_OK:create_event_empty_title"

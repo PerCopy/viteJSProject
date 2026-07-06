@@ -1,26 +1,23 @@
 #!/usr/bin/env sh
 set -eu
 BASE_URL="${BASE_URL:-http://app:6713}"
-TMP_DIR="$(mktemp -d)"
-RESPONSE_FILE="$TMP_DIR/create_event_missing_title.json"
-STATUS_FILE="$TMP_DIR/create_event_missing_title.status"
-trap 'rm -rf "$TMP_DIR"' EXIT
+CASE_SUFFIX="$(date +%s)-$$"
+EVENT_DESCRIPTION="Missing title test ${CASE_SUFFIX}"
+EVENT_LOCATION="Test Location ${CASE_SUFFIX}"
+START_DATE="2025-04-01T09:00:00Z"
+END_DATE="2025-04-01T17:00:00Z"
+RESPONSE_FILE="/tmp/create_event_missing_title_${CASE_SUFFIX}.json"
+STATUS_FILE="/tmp/create_event_missing_title_${CASE_SUFFIX}.status"
+trap 'rm -f "$RESPONSE_FILE" "$STATUS_FILE"' EXIT
 
 # Given
-cat >"$TMP_DIR/request.json" <<EOF
-{
-  "description": "A workshop event",
-  "location": "Community Center",
-  "startDate": "2024-04-10T10:00:00Z",
-  "endDate": "2024-04-10T12:00:00Z"
-}
-EOF
+: "Prepare an invalid payload missing the required title field"
 
 # When
 curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
   -X POST "$BASE_URL/api/events" \
   -H 'Content-Type: application/json' \
-  --data @"$TMP_DIR/request.json" > "$STATUS_FILE"
+  --data "{\"description\":\"${EVENT_DESCRIPTION}\",\"location\":\"${EVENT_LOCATION}\",\"startDate\":\"${START_DATE}\",\"endDate\":\"${END_DATE}\"}" > "$STATUS_FILE"
 
 # Then
 STATUS="$(cat "$STATUS_FILE")"
@@ -28,6 +25,6 @@ STATUS="$(cat "$STATUS_FILE")"
 grep -F '"message":"Title, start date, end date, and location are required."' "$RESPONSE_FILE" >/dev/null
 
 # Cleanup
-# Stateless negative test; no cleanup needed.
+: "Rejected request should not create persistent state"
 
 echo "CODEVALID_TEST_ASSERTION_OK:create_event_missing_title"

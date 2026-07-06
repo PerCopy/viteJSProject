@@ -23,12 +23,6 @@ test("Prevent Event Creation When Start Date Is After End Date", async ({ page }
       });
       return;
     }
-
-    await route.fulfill({
-      status: 400,
-      contentType: "application/json",
-      body: JSON.stringify({ message: apiErrorMessage }),
-    });
   });
 
   await recorder.step("Open the Events page");

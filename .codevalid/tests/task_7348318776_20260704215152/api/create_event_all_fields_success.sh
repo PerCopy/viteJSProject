@@ -23,7 +23,7 @@ curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
 
 # Then
 [ "$(cat "$STATUS_FILE")" = "201" ]
-grep -F '"id":"event-' "$RESPONSE_FILE" >/dev/null
+grep -F '"id":"event_' "$RESPONSE_FILE" >/dev/null
 grep -F "\"title\":\"${TITLE}\"" "$RESPONSE_FILE" >/dev/null
 grep -F "\"description\":\"${DESCRIPTION}\"" "$RESPONSE_FILE" >/dev/null
 grep -F "\"location\":\"${LOCATION}\"" "$RESPONSE_FILE" >/dev/null

@@ -1,0 +1,205 @@
+UI TEST LEARNINGS — /tmp/code_suggestion_t0mw75iy
+Session date: 2026-07-05
+Stack: React + Vite, Playwright, route interception (no real backend during tests)
+
+===========================================================================
+1. IMPORT / PATH PITFALLS
+===========================================================================
+
+- Spec files live at:  .codevalid/ui/test/<task_folder>/<spec>.spec.js
+  Helpers live at:     .codevalid/ui/helpers/
+  Correct relative path from a spec: ../../helpers/<file>.js
+  WRONG (causes MODULE_NOT_FOUND):   ../helpers/<file>.js
+
+- mock-api.js is NOT shipped with the repo — it must be created in
+  .codevalid/ui/helpers/mock-api.js before specs that import it will load.
+  Required exports: seedAuthenticatedSession(page), mockEventScenario(page, opts)
+
+- All helper imports use ES module syntax (import / export), not require().
+  The playwright.config.js and helpers all use "type": "module" conventions.
+
+
+===========================================================================
+2. ExecutionRecorder — CORRECT USAGE
+===========================================================================
+
+Constructor signature:  new ExecutionRecorder(acceptanceCriteriaId, testTitle)
+  - acceptanceCriteriaId : string  (e.g. "create_event_with_valid_details")
+  - testTitle            : string  (e.g. "Create Event Successfully With Valid Inputs")
+
+WRONG — passes Playwright's TestInfo object as second arg:
+  const recorder = new ExecutionRecorder("my_id", testInfo);   // TypeError at save()
+
+CORRECT:
+  const recorder = new ExecutionRecorder("my_id", "Human-readable test title");
+
+Why it breaks: ExecutionRecorder.save() calls this.testTitle.replace(...).
+If testTitle is a TestInfo object (not a string), .replace is undefined → TypeError.
+The test assertions may have already passed (CODEVALID_TEST_ASSERTION_OK printed)
+before the crash, so the test still fails in Playwright even though the UI worked.
+
+Always call recorder.save(testInfo) at the very end, passing testInfo only there.
+
+
+===========================================================================
+3. SELECTOR STRATEGY — WHAT WORKS IN THIS APP
+===========================================================================
+
+DO USE:
+  page.locator('input[name="fieldName"]')   — reliable; name attrs are always present
+  page.getByRole("button", { name: /text/i })
+  page.getByRole("heading", { name: "..." })
+  page.getByPlaceholder("...")              — safe for text inputs and textareas
+
+DO NOT USE:
+  page.getByLabel("Start Date *")   — FAILS in this repo
+  page.getByLabel("End Date *")     — FAILS in this repo
+
+Why getByLabel fails here:
+  src/components/ui/Input.jsx renders <label> and <input> as siblings inside a
+  <div>, with NO htmlFor/id pairing and NO aria-labelledby/aria-label.
+  Playwright's getByLabel() requires an ARIA association to resolve the input.
+  Without it the locator never matches and the test times out (30 s).
+
+For date inputs specifically use:
+  page.locator('input[name="startDate"]')
+  page.locator('input[name="endDate"]')
+
+Verify name attributes by reading src/pages/Events.jsx before writing selectors.
+
+
+===========================================================================
+4. AUTHENTICATION / PROTECTED ROUTES
+===========================================================================
+
+- /events is a protected route (src/components/ProtectedRoute.jsx checks
+  localStorage.getItem("token")).
+- Call seedAuthenticatedSession(page) BEFORE page.goto("/events").
+  It uses page.addInitScript() to inject localStorage entries before any
+  navigation, so the ProtectedRoute check passes on first load.
+
+- Keys written to localStorage by seedAuthenticatedSession:
+    "token"       — checked by isAuthenticated() in src/utils/api.js
+    "user"        — parsed by getCurrentUser()
+    "authToken"   — extra alias for safety
+    "currentUser" — extra alias for safety
+
+- If a test navigates to /events without seeding auth, the app redirects to
+  /signin and all subsequent selectors time out.
+
+
+===========================================================================
+5. API MOCKING PATTERNS
+===========================================================================
+
+All API calls go through src/utils/api.js using fetch() with no base URL
+(proxied by Vite). Intercept with page.route("**/api/...").
+
+Confirmed API paths (read from src/utils/api.js):
+  GET  /api/events          — fetch events list
+  POST /api/events          — create event; returns created event object
+  POST /api/auth/signin     — sign in
+  POST /api/auth/signup     — sign up
+  GET  /api/registrations/:eventId
+  POST /api/registrations
+
+mockEventScenario(page, { initialEvents, createdEvent }) in helpers/mock-api.js:
+  - Single page.route("**/api/events") handler covers both GET and POST.
+  - Tracks a local `eventCreated` flag; GET returns initialEvents before POST,
+    returns [createdEvent] after POST (covers page reload / re-navigation).
+  - POST returns HTTP 201 with the createdEvent object.
+
+Always include registrationCount: 0 in event fixture objects — the app
+renders event.registrationCount and will show "undefined registered" if missing.
+
+Event object shape expected by Events.jsx:
+  { id, title, description, location, startDate, endDate, registrationCount }
+
+
+===========================================================================
+6. MOCK FILE LOCATIONS AND ROLES
+===========================================================================
+
+.codevalid/ui/mock/mock-server.js  — standalone Express server (port 5001).
+  Used for integration runs where requests pass through Vite proxy.
+  NOT used by Playwright specs directly; specs use page.route() interception.
+
+.codevalid/ui/mock/mock-data.js    — static seed data for mock-server.js.
+  Only imported by mock-server.js; specs do not import it.
+
+.codevalid/ui/helpers/mock-api.js  — Playwright route-interception helpers.
+  THIS is what specs import. Contains seedAuthenticatedSession and
+  mockEventScenario. Create/edit this file to change test-level mocking.
+
+Do not confuse the two layers: mock-server.js ≠ mock-api.js.
+
+
+===========================================================================
+7. PLAYWRIGHT CONFIG EXPECTATIONS
+===========================================================================
+
+- baseURL: http://localhost:5174  (set in playwright.config.js use block)
+  Use relative paths in page.goto(): page.goto("/events"), not full URLs.
+
+- webServer command: "npm run dev:frontend -- --port 5174 --strictPort"
+  The Vite dev server must be running; playwright.config.js starts it automatically.
+
+- Test timeout: 30000 ms (default). A locator that never resolves will consume
+  the full 30 s before the test fails — check selectors before suspecting logic.
+
+- Retries: 0 (no automatic retry). Fix the root cause; do not rely on retries.
+
+- Workers: 3 (parallel). Tests must be fully independent; do not share state
+  across specs. Each spec seeds its own auth and mock routes.
+
+- Spec files must match **/*.spec.js to be picked up by the project config.
+
+- Artifacts (trace, video, screenshot) are always recorded (trace: "on",
+  video: "on", screenshot: "on"). Check test-results/ folder for diagnostics.
+
+
+===========================================================================
+8. AVOID / DO NOT LIST
+===========================================================================
+
+- Do NOT use page.getByLabel() for any input in this app until Input.jsx
+  is updated to include htmlFor/id ARIA linkage. Use input[name] instead.
+
+- Do NOT pass the Playwright TestInfo object as the second arg to
+  ExecutionRecorder. Always pass a plain string title.
+
+- Do NOT import helpers using ../helpers/ from inside a task subfolder.
+  The correct depth is ../../helpers/.
+
+- Do NOT skip seedAuthenticatedSession(page) for any test that navigates to
+  /events or any other protected route.
+
+- Do NOT call page.goto() before setting up page.route() interceptors and
+  page.addInitScript(). Routes and init scripts must be registered first.
+
+- Do NOT hardcode localhost URLs in page.goto(). Use relative paths so
+  baseURL from playwright.config.js applies.
+
+- Do NOT import from .codevalid/ui/mock/mock-data.js or mock-server.js in
+  spec files. Those are server-side files. Use helpers/mock-api.js instead.
+
+- Do NOT guess API route names. Always verify in src/utils/api.js before
+  writing a page.route() intercept.
+
+- Do NOT omit registrationCount from event fixture objects — the UI renders it.
+
+
+===========================================================================
+9. RECORDING / ARTIFACTS
+===========================================================================
+
+- recorder.save(testInfo) writes a JSON flow file under:
+    .codevalid/ui/recording/<task_folder>/flows/<id>-<title>.json
+  This is separate from Playwright's built-in trace/video/screenshot artifacts.
+
+- The CODEVALID_TEST_ASSERTION_OK:<id> console.log must appear before
+  recorder.save(testInfo) for the run to be counted as passing by the
+  evaluation harness. Print it after all assertions, before save().
+
+- If CODEVALID_TEST_ASSERTION_OK is printed but the test still fails, the
+  crash is in recorder.save() — check the ExecutionRecorder constructor args.

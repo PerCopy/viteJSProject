@@ -1,0 +1,176 @@
+## Repository: vitejsproject — Test Learnings
+
+---
+
+### Runtime & stack
+
+- Node 22, `"type": "module"` (ESM throughout — no CommonJS)
+- Express 5 (`express: ^5.2.1`)
+- Fully in-memory data store (`backend/data/store.js`) — no database, no Prisma, no migrations
+- Server entry: `backend/server.js`, reads `process.env.PORT`, defaults to 6713
+- `package-lock.json` is committed — the Dockerfile uses `npm ci --ignore-scripts`
+- No `tsconfig.json` — TypeScript types are devDependencies only (`ts-jest`, `@types/*`), unused at runtime
+- No `jest.config.*` file — Jest is a devDependency but has no project configuration
+- No `.env` or `.env.example` — all config comes from compose environment variables
+
+---
+
+### API contract (current implementation)
+
+- `GET  /health`                      → 200 `{ "status": "ok" }`
+- `GET  /api/events`                  → 200 array, sorted by `startDate` ASC, each item includes `registrationCount`
+- `POST /api/events`                  → 201 `{ id, title, description, startDate, endDate, location, registrationCount: 0 }`
+  - Required fields: `title`, `startDate`, `endDate`, `location`
+  - Optional: `description` (defaults to `""`)
+  - Missing required field → 400; exact message: `"Title, start date, end date, and location are required."`
+  - Empty string for required field (`title: ""` or `location: ""`) → 400; same message as missing field
+  - **APP_BUG (unimplemented):** `startDate > endDate` is NOT validated — the app accepts reversed
+    dates and returns 201. Do NOT write tests asserting a 400 for this case until the bug is fixed.
+    Expected (but absent) message: `"Start date must be before or equal to the end date."`
+- `POST /api/auth/signup`             → 201 `{ user, token }`; required: `username`, `email`, `password`, `fullName`
+- `POST /api/auth/signin`             → 200 `{ user, token }`; 401 on bad credentials
+- `GET  /api/registrations/:eventId`  → 200 array sorted by `registeredAt` DESC; 404 if event missing
+- `POST /api/registrations`           → 201; required: `eventId`, `name`, `email`, `phone`; date-range and duplicate checks apply
+
+---
+
+### Event ID format
+
+- Event IDs are generated as `event_<random>` (underscore separator), e.g. `event_x7k2m9q3r`
+- ID generation: `` `${prefix}_${Math.random().toString(36).substr(2, 9)}` `` at `backend/server.js:15`
+- When using `grep -F` to assert an event ID prefix, use `'"id":"event_'` (underscore), NOT `'"id":"event-'` (hyphen)
+- Wrong separator (`event-`) causes exit 1 even when the app correctly returns a 201 with a valid ID
+- `create_event_all_fields_success.sh` had this bug (hyphen) and was confirmed fixed to underscore in debug iteration 8
+- Similarly: registration IDs are `reg_<random>`, user IDs are `user_<random>`
+
+---
+
+### Pre-seeded in-memory data (important for test isolation)
+
+- `backend/data/store.js` seeds 2 users, 3 events, and 2 registrations on every cold start
+- Tests asserting an empty events list (`GET /api/events` returns `[]`) will always fail — seeded events are always present
+- Do NOT write tests that assume `GET /api/events` returns an empty array — this is a TEST_DEFECT;
+  the app has no state-reset or isolation endpoint
+- Correct isolation pattern: create events with a unique `CASE_SUFFIX` in the title, then search
+  for those specific titles in the list response (see `get_events_happy_path.sh`)
+- `get_events_empty_list.sh` correctly asserts `len(data) >= 1` (not `== 0`) — that is the right
+  shape for this repo
+
+---
+
+### Shell test script patterns
+
+- Scripts use `#!/usr/bin/env sh` + `set -eu` — POSIX sh (dash), not bash
+- `BASE_URL` defaults to `http://app:6713` (container-internal DNS in the compose network)
+- Uniqueness suffix: `CASE_SUFFIX="$(date +%s)-$$"` — always append to titles/emails to avoid
+  collisions across concurrent or repeated runs
+- curl pattern: `curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' ... > "$STATUS_FILE"`
+  - Response body goes to file; HTTP status code goes to a separate status file
+  - Always check status before body assertions: `[ "$(cat "$STATUS_FILE")" = "201" ]`
+- JSON assertions use two methods:
+  1. `grep -F '"key":"value"'` — fast exact-string check for simple scalar fields
+  2. `python - "$ARG" <<'PY' ... PY` — inline Python heredoc for structural/ordering/arithmetic assertions
+- Heredoc argument passing: positional args come **before** the closing `<<'PY'` on the opening line, e.g.
+  `python - "$RESPONSE_FILE" "$TITLE" <<'PY'` — read inside the heredoc as `sys.argv[1]`, `sys.argv[2]`
+- Final line must be exactly: `echo "CODEVALID_TEST_ASSERTION_OK:<test_name>"`
+- Temp files must be cleaned up via `trap cleanup_files EXIT`
+
+---
+
+### seed-test image (`.codevalid/seed-test.Dockerfile`)
+
+- Base: `node:22-bookworm-slim`
+- Must install: `curl`, `jq`, `ca-certificates`, `python3`, `python-is-python3`
+- `python-is-python3` creates `/usr/bin/python` → `python3`; without it any script calling
+  `python` exits 127 (command not found) and never reaches the assertion marker
+- The seed-test image runs only `seed_test_cases/health_check.sh` under the `test` profile;
+  the API test scripts run inside the **app container**, not here
+
+---
+
+### app image (`.codevalid/Dockerfile`)
+
+- Base: `node:22-bookworm-slim`
+- Must install in the apt-get tooling layer: `ca-certificates`, `curl`, `wget`, `bash`,
+  `netcat-openbsd`, `jq`, `python3`, `python-is-python3`
+- `python-is-python3` is required in the **app image** — the test runner executes API test scripts
+  inside the app container (`docker compose exec app sh <script>`); `python` must resolve there
+- `python3` alone is not sufficient — scripts call `python`, not `python3`; omitting
+  `python-is-python3` produces `sh: N: python: not found` (exit 127) on any script line that
+  invokes a Python heredoc
+- `python-is-python3` works correctly in `node:22-bookworm-slim` (bookworm); the package is
+  available and creates `/usr/bin/python` pointing to `python3` — confirmed via direct Docker test
+- Persistent `python: not found` across iterations despite the correct Dockerfile indicates a Docker
+  layer cache hit on the old `apt-get install` layer; the fix is always a clean `--no-cache` rebuild;
+  the Dockerfile itself does not need to be changed
+- No Prisma, no codegen step — install → `COPY . .` → server runs directly
+- No database dependency — `dependencies.json` has an empty `dependencies` array
+- `WAIT_FOR_TCP` and `MIGRATE_CMD` are unset in compose (entrypoint no-ops both)
+- No WireMock or stripe-mock needed (no outbound HTTP dependencies)
+
+---
+
+### Infrastructure: no external dependencies
+
+- `dependencies.json`: `{ "service_port": 6713, "dependencies": [] }`
+- Toxiproxy is present in compose but proxies nothing (empty `toxiproxy.json`)
+- No database container, no WireMock, no stripe-mock
+- Do not add toxiproxy proxy entries or mock services unless the app is changed to use external deps
+
+---
+
+### Compose host port bindings
+
+- **Do NOT publish host ports for `app` or `toxiproxy`** — the environment is DinD on Kubernetes;
+  host ports from previous iterations' containers remain allocated and cause
+  `Bind for 0.0.0.0:<port> failed: port is already allocated` on the next run
+- The `app` service must have **no** `ports:` stanza — seed-test reaches it via
+  `http://app:6713` over the `codevalid` Docker network; the healthcheck probes
+  `http://localhost:6713/health` from inside the container; neither requires a host binding
+- The `toxiproxy` service must have **no** `ports:` stanza — test scripts inject toxics via
+  `http://toxiproxy:8474/...` over the Docker network; the busybox healthcheck probes
+  `http://localhost:8474/version` from inside the container; no host binding needed
+- If a port-conflict error appears in compose output, the fix is always to remove the offending
+  `ports:` stanza from the service — never to kill the previous container manually
+
+---
+
+### Known APP_BUGs (do not write tests that assert these behaviours until fixed)
+
+- `POST /api/events` with `startDate > endDate` returns 201, not 400 — date-order validation is
+  absent from `backend/server.js`; the error message
+  `"Start date must be before or equal to the end date."` is never produced
+- Tests for the reversed-date case must accept either 400 (if fixed) or 201 (current behaviour);
+  a hard assertion for 400 alone will always fail with exit 1 against the current app
+
+---
+
+### Avoid / Do not
+
+- Do NOT publish host ports for `app` or `toxiproxy` in `docker-compose.yml` — port conflicts from
+  prior iterations will prevent the container from starting; all communication is intra-network
+- Do NOT call `python` in test scripts without ensuring `python3` and `python-is-python3` are
+  installed in **both** the app image and the seed-test image — scripts run inside the app
+  container; `python3` alone does not create the `python` alias
+- Do NOT use `'"id":"event-'` (hyphen) in grep assertions for event IDs — the separator is
+  underscore: `'"id":"event_'`; wrong separator causes exit 1 even when the app returns a correct
+  201 response
+- Do NOT write tests that expect `GET /api/events` to return `[]` — seeded data is always present;
+  assert `len(data) >= 1` or filter by unique title instead
+- Do NOT write tests asserting HTTP 400 for `startDate > endDate` on `POST /api/events` — that
+  validation is not implemented (APP_BUG); such tests will always fail with exit 1
+- Do NOT assume `POST /api/events` stores ISO-8601 datetime strings verbatim in a normalised form;
+  the app echoes back whatever string was sent — use date-only strings (`"2024-06-01"`) for
+  predictable `startDate` values in grep/python assertions
+- Do NOT add `jest`, `ts-jest`, or unit-test invocations to the Dockerfile CMD/ENTRYPOINT —
+  the container runs the server only
+- Do NOT add a `tsconfig.json` with strict settings unless intentionally enabling TypeScript
+  compilation; the project has no tsconfig and runs as plain ESM JavaScript
+- Do NOT use `npm install` (without `--ignore-scripts`) in the Dockerfile — always use
+  `npm ci --ignore-scripts` (lockfile is committed)
+- Do NOT introduce `volumes:` mounts for config files — all config must be baked into images
+  via `COPY` in a Dockerfile (DinD environment; bind mounts silently fail)
+- Do NOT add `MIGRATE_CMD` or `WAIT_FOR_TCP` to the compose `app` environment — there is
+  no database and no migration to run
+- Do NOT assume a previous iteration's script edit was applied on disk — always verify the actual
+  file content before declaring a fix complete; git diff shows the real state

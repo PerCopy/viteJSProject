@@ -34,9 +34,7 @@ test("Reject Event Creation When Start Date Is After End Date", async ({ page },
     await route.fulfill({
       status: 400,
       contentType: "application/json",
-      body: JSON.stringify({
-        message: "Start date must be before end date",
-      }),
+      body: JSON.stringify({ message: "Start date must be before end date" }),
     });
   });
 

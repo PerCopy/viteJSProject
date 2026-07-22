@@ -1,0 +1,42 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .codevalid/Dockerfile
+    environment:
+      PORT: "6713"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6713/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      toxiproxy:
+        condition: service_healthy
+    networks: [codevalid]
+
+  toxiproxy:
+    build:
+      context: ./toxiproxy
+      dockerfile: Dockerfile
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    healthcheck:
+      test: ["CMD", "/bin/busybox", "wget", "-q", "-O", "/dev/null", "http://localhost:8474/version"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks: [codevalid]
+
+  seed-test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: seed-test.Dockerfile
+    depends_on:
+      app:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "seed_test_cases/health_check.sh"]
+    networks: [codevalid]
+
+networks:
+  codevalid:

@@ -120,12 +120,6 @@ app.post("/api/events", (req, res) => {
     });
   }
 
-  if (new Date(startDate) > new Date(endDate)) {
-    return res.status(400).json({
-      message: "Start date must be before or equal to the end date.",
-    });
-  }
-
   const newEvent = {
     id: generateId("event"),
     title,

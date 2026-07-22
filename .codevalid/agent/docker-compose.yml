@@ -1,0 +1,42 @@
+services:
+  toxiproxy:                               # dependency gateway — built, not mounted
+    build: { context: ./toxiproxy, dockerfile: Dockerfile }
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    ports:
+      - "5432:5432"                        # Postgres (via gateway) — for the agent to reach
+      - "8080:8080"                        # third-party HTTP mock (via gateway)
+      - "8474:8474"                        # toxiproxy control API (inject toxics during tests)
+    healthcheck:
+      test: ["CMD", "/bin/busybox", "wget", "-q", "-O", "/dev/null", "http://localhost:8474/version"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks: [codevalid]
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: appdb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks: [codevalid]
+
+  wiremock:                                # built, not mounted
+    build: { context: ./wiremock, dockerfile: Dockerfile }
+    command: ["--global-response-templating", "--disable-gzip", "--verbose"]
+    networks: [codevalid]
+
+  seed-test:                               # runs on demand only
+    profiles: ["test"]
+    build: { context: ./promptfoo, dockerfile: seed-test.Dockerfile }
+    environment:
+      LITELLM_API_KEY: "${LITELLM_API_KEY:?set LITELLM_API_KEY}"
+    networks: [codevalid]
+
+networks:
+  codevalid:
